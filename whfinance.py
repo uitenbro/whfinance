@@ -7,11 +7,11 @@ import time
 # so outputs remain comparable when Eterna is disabled.
 dragonfly_scenarios = [
     {
-        "label": "Dragonfly Blue 150+20%",
+        "label": "Dragonfly Blue 100+25%",
         "price": 45000,             # $ per unit revenue
-        "cost": 9000,               # $ per unit cost
-        "initial_units": 150,       # units sold in first sales year
-        "growth": 1.20,             # multiplicative growth factor (compounded, int-rounded each year)
+        "cost": 10000,               # $ per unit cost
+        "initial_units": 100,       # units sold in first sales year
+        "growth": 1.25,             # multiplicative growth factor (compounded, int-rounded each year)
         "maturation_year": 2,       # year when validation is complete
         "maturation_cost": 4000000, # $ cost in maturation year
     },
@@ -20,13 +20,13 @@ dragonfly_scenarios = [
 # Eterna services use whole missions. Growth is an integer number of missions added per year.
 eterna_service_scenarios = [
     {
-        "label": "Eterna 2+2 Services",
-        "missions_per_year": 2,            # missions in first Eterna service year
-        "mission_growth_per_year": 2,      # +missions each subsequent year (integer)
-        "avg_revenue_per_mission": 125000, # $ per mission revenue
+        "label": "Eterna 4+4 Services",
+        "missions_per_year": 4,            # missions in first Eterna service year
+        "mission_growth_per_year": 4,      # +missions each subsequent year (integer)
+        "avg_revenue_per_mission": 150000, # $ per mission revenue
         "avg_cost_per_mission": 20000,     # $ per mission variable cost
         "baseline_cost": 25000,           # $ fixed annual ops cost (overhead) for Eterna
-        "maturation_year": 7,       # year when validation is complete
+        "maturation_year": 3,       # year when validation is complete
         "maturation_cost": 4000000, # $ cost in maturation year
     }
 ]
@@ -55,13 +55,13 @@ scenario_combinations = [
     #     "eterna": "Eterna 2+2 Services",  # set to None to disable Eterna
     #     "finance": "Scale to 11 FTE",
     # },
+    # {
+    #     "dragonfly": None,#"Dragonfly Blue 150+20%", # set to None to disable Dragonfly
+    #     "eterna": "Eterna 4+4 Services",  # set to None to disable Eterna
+    #     "finance": "Scale to 11 FTE",
+    # },
     {
-        "dragonfly": None,#"Dragonfly Blue 150+20%", # set to None to disable Dragonfly
-        "eterna": "Eterna 2+2 Services",  # set to None to disable Eterna
-        "finance": "Scale to 11 FTE",
-    },
-    {
-        "dragonfly": "Dragonfly Blue 150+20%", # set to None to disable Dragonfly
+        "dragonfly": "Dragonfly Blue 100+25%", # set to None to disable Dragonfly
         "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
         "finance": "Scale to 11 FTE",
     },
@@ -85,13 +85,13 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
     # Pre-compute Dragonfly units per year using original compounding & int rounding logic
     dragonfly_units_by_year = [0] * TOTAL_YEARS
     if df_scenario:
-        units = df_scenario["initial_units"]
-        growth = df_scenario["growth"]
+        units = 0
         for year in range(1, TOTAL_YEARS + 1):
-            if year >= df_scenario["maturation_year"] + 1:  # sales begin one year after maturation
-                dragonfly_units_by_year[year - 1] = units
-                units = int(units * growth)  # grow units for next year and round to nearest whole unit
-
+            if year == df_scenario["maturation_year"] + 1:  # first sales year after maturation
+                units = df_scenario["initial_units"]
+            elif year > df_scenario["maturation_year"] + 1:  # subsequent sales years
+                units = int(units * df_scenario["growth"])
+            dragonfly_units_by_year[year - 1] = units
 
     for year in range(1, TOTAL_YEARS + 1):
         # Base OPEX / grants
@@ -131,7 +131,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             eterna_revenue = missions * eterna_scenario["avg_revenue_per_mission"]
             eterna_cost = eterna_scenario["baseline_cost"] + missions * eterna_scenario["avg_cost_per_mission"]
 
-        total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenu
+        total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenue
         total_cost = fte_cost + other_cost + uav_cost + eterna_cost + maturation_cost
         net_cashflow = total_revenue - total_cost
 
@@ -147,10 +147,10 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             "Total FTE Cost": fte_cost / 1e6,
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
-            "Software Dev Revenue": sw_development_revenue / 1e6,
-            "UAV Units": uav_units,
-            "UAV Cost": uav_cost / 1e6,
-            "UAV Revenue": uav_revenue / 1e6,
+            "SW Dev Revenue": sw_development_revenue / 1e6,
+            "Dragonfly Units": uav_units,
+            "Dragonfly Cost": uav_cost / 1e6,
+            "Dragonfly Revenue": uav_revenue / 1e6,
             "Eterna Missions": (missions if eterna_scenario and year >= eterna_start_year else 0),
             "Eterna Cost": eterna_cost / 1e6,
             "Eterna Revenue": eterna_revenue / 1e6,
@@ -192,10 +192,10 @@ for combo in scenario_combinations:
     # --- Summary header (keep concise, include key inputs) ---
     print("\n--- Financial Summary Table (%s) ---" % label)
     if df_scenario:
-        print("UAV Price per Unit: $%s" % format(df_scenario['price'], ","))
-        print("UAV Cost per Unit:  $%s" % format(df_scenario['cost'], ","))
-        print("Initial UAV Units Sold (Year %s): %d" % (df_scenario['maturation_year'] + 1, df_scenario['initial_units']))
-        print("UAV Sales Growth Rate: %d%%" % int((df_scenario['growth'] - 1) * 100))
+        print("Dragonfly Price per Unit: $%s" % format(df_scenario['price'], ","))
+        print("Dragonfly Cost per Unit:  $%s" % format(df_scenario['cost'], ","))
+        print("Initial Dragonfly Units Sold (Year %s): %d" % (df_scenario['maturation_year'] + 1, df_scenario['initial_units']))
+        print("Dragonfly Sales Growth Rate: %d%%" % int((df_scenario['growth'] - 1) * 100))
     if eterna_scenario:
         es = eterna_scenario
         start_year = eterna_scenario['maturation_year'] + 1
@@ -226,7 +226,7 @@ for combo in scenario_combinations:
         for row in df_result.index:
             line = "%-19s" % row
             for col in df_result.columns:
-                if row in ("UAV Units", "Eterna Missions"):
+                if row in ("Dragonfly Units", "Eterna Missions"):
                     line += "%7d " % int(df_result.loc[row, col])
                 else:
                     line += "%7.2f " % df_result.loc[row, col]
