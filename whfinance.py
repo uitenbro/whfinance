@@ -38,6 +38,8 @@ financial_scenarios = [
         # FTEs by year (10 years)
         "fte_count_by_year": [5, 9, 11, 11, 11, 11, 11, 11, 11, 11],
         "fte_cost_per": 212500,    # $/FTE/year (fully loaded)
+        "sw_development_customers": [0, 3, 5, 5, 5, 5, 5, 5, 5, 5], # customers by year
+        "sw_revenue_per_customer_per_year": 1880 * 150, # one developer per customer, $150/hr for year
         "other_cost": 400000,      # $/year
         "grant_revenue": 100000,   # $/year
         # Maturation costs applied in their specified years
@@ -97,6 +99,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
         fte_cost = fte_count * finance_scenario["fte_cost_per"]
         other_cost = finance_scenario["other_cost"]
         grant_revenue = finance_scenario["grant_revenue"]
+        sw_development_revenue = finance_scenario["sw_development_customers"][year - 1] * finance_scenario["sw_revenue_per_customer_per_year"]
 
         # Maturation in specified years
         maturation_cost = 0
@@ -128,7 +131,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             eterna_revenue = missions * eterna_scenario["avg_revenue_per_mission"]
             eterna_cost = eterna_scenario["baseline_cost"] + missions * eterna_scenario["avg_cost_per_mission"]
 
-        total_revenue = grant_revenue + uav_revenue + eterna_revenue
+        total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenu
         total_cost = fte_cost + other_cost + uav_cost + eterna_cost + maturation_cost
         net_cashflow = total_revenue - total_cost
 
@@ -144,6 +147,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             "Total FTE Cost": fte_cost / 1e6,
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
+            "Software Dev Revenue": sw_development_revenue / 1e6,
             "UAV Units": uav_units,
             "UAV Cost": uav_cost / 1e6,
             "UAV Revenue": uav_revenue / 1e6,
