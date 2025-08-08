@@ -8,10 +8,12 @@ import time
 dragonfly_scenarios = [
     {
         "label": "Dragonfly Blue 150+20%",
-        "price": 45000,          # $ per unit revenue
-        "cost": 9000,           # $ per unit cost
-        "initial_units": 150,    # units sold in first sales year
-        "growth": 1.20,          # multiplicative growth factor (compounded, int-rounded each year)
+        "price": 45000,             # $ per unit revenue
+        "cost": 9000,               # $ per unit cost
+        "initial_units": 150,       # units sold in first sales year
+        "growth": 1.20,             # multiplicative growth factor (compounded, int-rounded each year)
+        "maturation_year": 2,       # year when validation is complete
+        "maturation_cost": 4000000, # $ cost in maturation year
     },
 ]
 
@@ -24,6 +26,8 @@ eterna_service_scenarios = [
         "avg_revenue_per_mission": 125000, # $ per mission revenue
         "avg_cost_per_mission": 20000,     # $ per mission variable cost
         "baseline_cost": 25000,           # $ fixed annual ops cost (overhead) for Eterna
+        "maturation_year": 7,       # year when validation is complete
+        "maturation_cost": 4000000, # $ cost in maturation year
     }
 ]
 
@@ -37,28 +41,24 @@ financial_scenarios = [
         "other_cost": 400000,      # $/year
         "grant_revenue": 100000,   # $/year
         # Maturation costs applied in their specified years
-        "maturation_year_avionics": 2,
-        "maturation_cost_avionics": 2000000,
-        "maturation_year_dragonfly": 2,
-        "maturation_cost_dragonfly": 4000000,
-        "maturation_year_eterna": 7,
-        "maturation_cost_eterna": 4000000,
-    }
+        "maturation_year_avionics": 2, # year when avionics validation is complete
+        "maturation_cost_avionics": 2000000, # $ cost in maturation year 
+    } 
 ]
 
 # Choose which combo(s) to run (no comprehensive looping required)
 scenario_combinations = [
+    # {
+    #     "dragonfly": "Dragonfly Blue 150+20%", # set to None to disable Dragonfly
+    #     "eterna": "Eterna 2+2 Services",  # set to None to disable Eterna
+    #     "finance": "Scale to 11 FTE",
+    # },
     {
-        "dragonfly": "Dragonfly Blue 150+20%", # set to None to disable Dragonfly
-        "eterna": "Eterna 2+2 Services",  # set to None to disable Eterna
-        "finance": "Scale to 11 FTE",
-    },
-        {
         "dragonfly": None,#"Dragonfly Blue 150+20%", # set to None to disable Dragonfly
         "eterna": "Eterna 2+2 Services",  # set to None to disable Eterna
         "finance": "Scale to 11 FTE",
     },
-        {
+    {
         "dragonfly": "Dragonfly Blue 150+20%", # set to None to disable Dragonfly
         "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
         "finance": "Scale to 11 FTE",
@@ -76,20 +76,20 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
     payback_year = None
 
     # Eterna starts the year AFTER its maturation year, if configured
-    eterna_start_year = (finance_scenario["maturation_year_eterna"] + 1) if eterna_scenario else None
+    eterna_start_year = None
+    if eterna_scenario:
+        eterna_start_year = eterna_scenario["maturation_year"] + 1 
 
     # Pre-compute Dragonfly units per year using original compounding & int rounding logic
     dragonfly_units_by_year = [0] * TOTAL_YEARS
-    for year in range(1, TOTAL_YEARS + 1):
-        if year >= finance_scenario["maturation_year_dragonfly"] + 1:  # sales begin one year after maturation
-            units = 0
-            growth = 0
-            if df_scenario:
-                units = df_scenario["initial_units"]
-                growth = df_scenario["growth"]
-            for _ in range(year - 3):
-                units = int(units * growth)  # round to nearest whole unit
-            dragonfly_units_by_year[year - 1] = units
+    if df_scenario:
+        units = df_scenario["initial_units"]
+        growth = df_scenario["growth"]
+        for year in range(1, TOTAL_YEARS + 1):
+            if year >= df_scenario["maturation_year"] + 1:  # sales begin one year after maturation
+                dragonfly_units_by_year[year - 1] = units
+                units = int(units * growth)  # grow units for next year and round to nearest whole unit
+
 
     for year in range(1, TOTAL_YEARS + 1):
         # Base OPEX / grants
@@ -103,11 +103,11 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
         if year == finance_scenario["maturation_year_avionics"]:
             maturation_cost += finance_scenario["maturation_cost_avionics"]
         if df_scenario:
-            if year == finance_scenario["maturation_year_dragonfly"]:
-                maturation_cost += finance_scenario["maturation_cost_dragonfly"]
+            if year == df_scenario["maturation_year"]:
+                maturation_cost += df_scenario["maturation_cost"]
         if eterna_scenario:
-            if year == finance_scenario["maturation_year_eterna"]:
-                maturation_cost += finance_scenario["maturation_cost_eterna"]
+            if year == eterna_scenario["maturation_year"]:
+                maturation_cost += eterna_scenario["maturation_cost"]
 
         # Dragonfly sales
         uav_units = 0
@@ -144,19 +144,19 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             "Total FTE Cost": fte_cost / 1e6,
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
-            "UAV Revenue": uav_revenue / 1e6,
+            "UAV Units": uav_units,
             "UAV Cost": uav_cost / 1e6,
-            "Eterna Revenue": eterna_revenue / 1e6,
+            "UAV Revenue": uav_revenue / 1e6,
+            "Eterna Missions": (missions if eterna_scenario and year >= eterna_start_year else 0),
             "Eterna Cost": eterna_cost / 1e6,
+            "Eterna Revenue": eterna_revenue / 1e6,
             "Maturation Cost": maturation_cost / 1e6,
             "Total Cost": total_cost / 1e6,
             "Total Revenue": total_revenue / 1e6,
             "Net Cash Flow": net_cashflow / 1e6,
-            "Cumulative Cashflow": cum_cashflow / 1e6,
             "Cumulative Cost": cum_cost / 1e6,
             "Cumulative Revenue": cum_revenue / 1e6,
-            "UAV Units": uav_units,
-            "Eterna Missions": (missions if eterna_scenario and year >= eterna_start_year else 0),
+            "Cumulative Cashflow": cum_cashflow / 1e6,
         })
 
     # Build table with metrics as rows, years as columns
@@ -190,11 +190,11 @@ for combo in scenario_combinations:
     if df_scenario:
         print("UAV Price per Unit: $%s" % format(df_scenario['price'], ","))
         print("UAV Cost per Unit:  $%s" % format(df_scenario['cost'], ","))
-        print("Initial UAV Units Sold (Year %s): %d" % (finance_scenario['maturation_year_dragonfly'] + 1, df_scenario['initial_units']))
+        print("Initial UAV Units Sold (Year %s): %d" % (df_scenario['maturation_year'] + 1, df_scenario['initial_units']))
         print("UAV Sales Growth Rate: %d%%" % int((df_scenario['growth'] - 1) * 100))
     if eterna_scenario:
         es = eterna_scenario
-        start_year = finance_scenario['maturation_year_eterna'] + 1
+        start_year = eterna_scenario['maturation_year'] + 1
         print("Eterna Start Year: Year %d" % start_year)
         print("Eterna Missions (Y%d): %d, +%d/yr" % (start_year, es['missions_per_year'], es['mission_growth_per_year']))
         print("Eterna $/Mission: rev $%s, cost $%s (baseline $%s/yr)" % (
@@ -265,11 +265,9 @@ for combo in scenario_combinations:
     ax.set_xticklabels(df_result.columns, rotation=45, fontsize=16)
     ax.tick_params(axis='y', labelsize=16)  # <-- Y-axis labels to 16pt
     ax.legend(fontsize=16)
-
-    # Add a little headroom above the tallest bar/line
-    #ymin, ymax = ax.get_ylim()
-    #ax.set_ylim(ymin, ymax * 1.10)
-
+    # Draw a horizontal line at y=0 across the whole width
+    ax.axhline(0, color='gray', alpha=0.3, linewidth=1)
+   
     plt.show(block=False)  # Use block=False to allow multiple plots in a row
     plt.pause(0.5)   # Keep window open long enough to render
 
