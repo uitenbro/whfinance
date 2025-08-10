@@ -7,7 +7,7 @@ import time
 # so outputs remain comparable when Eterna is disabled.
 dragonfly_scenarios = [
     {
-        "label": "Dragonfly Blue 100+25%",
+        "label": "Dragonfly 100+25%",
         "price": 45000,             # $ per unit revenue
         "cost": 10000,               # $ per unit cost
         "initial_units": 100,       # units sold in first sales year
@@ -20,11 +20,11 @@ dragonfly_scenarios = [
 # Eterna services use whole missions. Growth is an integer number of missions added per year.
 eterna_service_scenarios = [
     {
-        "label": "Eterna 4+4 Services",
-        "missions_per_year": 4,            # missions in first Eterna service year
-        "mission_growth_per_year": 4,      # +missions each subsequent year (integer)
-        "avg_revenue_per_mission": 150000, # $ per mission revenue
-        "avg_cost_per_mission": 20000,     # $ per mission variable cost
+        "label": "Eterna 1/wk+2/wk Services",
+        "missions_per_year": 52,            # missions in first Eterna service year
+        "mission_growth_per_year": 104,      # +missions each subsequent year (integer)
+        "avg_revenue_per_mission": 50000, # $ per mission revenue
+        "avg_cost_per_mission": 10000,     # $ per mission variable cost
         "baseline_cost": 25000,           # $ fixed annual ops cost (overhead) for Eterna
         "maturation_year": 3,       # year when validation is complete
         "maturation_cost": 4000000, # $ cost in maturation year
@@ -56,12 +56,12 @@ scenario_combinations = [
     #     "finance": "Scale to 11 FTE",
     # },
     # {
-    #     "dragonfly": None,#"Dragonfly Blue 150+20%", # set to None to disable Dragonfly
-    #     "eterna": "Eterna 4+4 Services",  # set to None to disable Eterna
+    #     "dragonfly": None,
+    #     "eterna": "Eterna 1/wk+2/wk Services",  # set to None to disable Eterna
     #     "finance": "Scale to 11 FTE",
     # },
     {
-        "dragonfly": "Dragonfly Blue 100+25%", # set to None to disable Dragonfly
+        "dragonfly": "Dragonfly 100+25%", # set to None to disable Dragonfly
         "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
         "finance": "Scale to 11 FTE",
     },
@@ -233,7 +233,7 @@ for combo in scenario_combinations:
             print(line)
 
     # --- Plot (lines for Total Cost/Revenue; bars for Cumulative Cashflow) ---
-    fig, ax = plt.subplots(figsize=(12, 8)) 
+    fig, ax = plt.subplots(figsize=(14, 7)) 
     plt.rcParams.update({'font.size': 16})
 
     df_result.T[["Total Cost", "Total Revenue"]].plot(
