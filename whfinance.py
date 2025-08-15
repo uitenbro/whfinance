@@ -7,10 +7,10 @@ import time
 # so outputs remain comparable when Eterna is disabled.
 dragonfly_scenarios = [
     {
-        "label": "Dragonfly 100+25%",
+        "label": "Dragonfly 125+25%",
         "price": 45000,             # $ per unit revenue
         "cost": 10000,               # $ per unit cost
-        "initial_units": 100,       # units sold in first sales year
+        "initial_units": 125,       # units sold in first sales year
         "growth": 1.25,             # multiplicative growth factor (compounded, int-rounded each year)
         "maturation_year": 2,       # year when validation is complete
         "maturation_cost": 4000000, # $ cost in maturation year
@@ -38,6 +38,7 @@ financial_scenarios = [
         # FTEs by year (10 years)
         "fte_count_by_year": [5, 9, 11, 11, 11, 11, 11, 11, 11, 11],
         "fte_cost_per": 212500,    # $/FTE/year (fully loaded)
+        "business_dev_cost_year": [600000, 750000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000], # $/year for business development
         "sw_development_customers": [0, 3, 5, 5, 5, 5, 5, 5, 5, 5], # customers by year
         "sw_revenue_per_customer_per_year": 1880 * 150, # one developer per customer, $150/hr for year
         "other_cost": 400000,      # $/year
@@ -61,7 +62,7 @@ scenario_combinations = [
     #     "finance": "Scale to 11 FTE",
     # },
     {
-        "dragonfly": "Dragonfly 100+25%", # set to None to disable Dragonfly
+        "dragonfly": "Dragonfly 125+25%", # set to None to disable Dragonfly
         "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
         "finance": "Scale to 11 FTE",
     },
@@ -97,6 +98,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
         # Base OPEX / grants
         fte_count = finance_scenario["fte_count_by_year"][year - 1]
         fte_cost = fte_count * finance_scenario["fte_cost_per"]
+        business_dev_cost = finance_scenario["business_dev_cost_year"][year - 1]
         other_cost = finance_scenario["other_cost"]
         grant_revenue = finance_scenario["grant_revenue"]
         sw_development_revenue = finance_scenario["sw_development_customers"][year - 1] * finance_scenario["sw_revenue_per_customer_per_year"]
@@ -132,7 +134,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             eterna_cost = eterna_scenario["baseline_cost"] + missions * eterna_scenario["avg_cost_per_mission"]
 
         total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenue
-        total_cost = fte_cost + other_cost + uav_cost + eterna_cost + maturation_cost
+        total_cost = fte_cost + business_dev_cost + other_cost + uav_cost + eterna_cost + maturation_cost
         net_cashflow = total_revenue - total_cost
 
         cum_cashflow += net_cashflow
@@ -145,6 +147,7 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
         rows.append({
             "FTEs": fte_count,
             "Total FTE Cost": fte_cost / 1e6,
+            "Business Dev Cost": business_dev_cost / 1e6,
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
             "SW Dev Revenue": sw_development_revenue / 1e6,
@@ -157,18 +160,18 @@ def run_simulation(df_scenario, eterna_scenario, finance_scenario):
             "Maturation Cost": maturation_cost / 1e6,
             "Total Cost": total_cost / 1e6,
             "Total Revenue": total_revenue / 1e6,
-            "Net Cash Flow": net_cashflow / 1e6,
-            "Cumulative Cost": cum_cost / 1e6,
-            "Cumulative Revenue": cum_revenue / 1e6,
-            "Cumulative Cashflow": cum_cashflow / 1e6,
+            "Oper Profit/Loss": net_cashflow / 1e6,
+            "Cumul Cost": cum_cost / 1e6,
+            "Cumul Revenue": cum_revenue / 1e6,
+            "Cumul Oper P/L": cum_cashflow / 1e6,
         })
 
     # Build table with metrics as rows, years as columns
     df = pd.DataFrame(rows, index=["Year %d" % i for i in range(1, TOTAL_YEARS + 1)]).T
 
     # Investment / Return metrics derived from cumulative cashflow
-    total_investment = -min(0, df.loc["Cumulative Cashflow"].min())
-    total_return = df.loc["Cumulative Cashflow"].iloc[-1]
+    total_investment = -min(0, df.loc["Cumul Oper P/L"].min())
+    total_return = df.loc["Cumul Oper P/L"].iloc[-1]
     roi = (total_return / total_investment) if total_investment else 0.0
     moic = ((total_return + total_investment) / total_investment) if total_investment else 0.0
 
@@ -232,8 +235,8 @@ for combo in scenario_combinations:
                     line += "%7.2f " % df_result.loc[row, col]
             print(line)
 
-    # --- Plot (lines for Total Cost/Revenue; bars for Cumulative Cashflow) ---
-    fig, ax = plt.subplots(figsize=(14, 7)) 
+    # --- Plot (lines for Total Cost/Revenue; bars for Cumul Op Profit/Loss) ---
+    fig, ax = plt.subplots(figsize=(14, 8)) 
     plt.rcParams.update({'font.size': 16})
 
     df_result.T[["Total Cost", "Total Revenue"]].plot(
@@ -244,16 +247,16 @@ for combo in scenario_combinations:
         label=["Total Cost", "Total Revenue"],
     )
 
-    df_result.T["Cumulative Cashflow"].plot(
+    df_result.T["Cumul Oper P/L"].plot(
         kind="bar",
         ax=ax,
         alpha=0.3,
         color="gray",
-        label="Cumulative Cashflow"
+        label="Cumul Operating Profit/Loss"
     )
 
     # Bar labels inside bars (handle positive/negative)
-    for idx, val in enumerate(df_result.T["Cumulative Cashflow"]):
+    for idx, val in enumerate(df_result.T["Cumul Oper P/L"]):
         if val >= 0:
             y_pos = val - 0.3
             va = 'top'
@@ -262,7 +265,7 @@ for combo in scenario_combinations:
             va = 'bottom'
         ax.text(idx, y_pos, f"{val:.2f}", ha='center', va=va, fontsize=13, color="black")
 
-    ax.set_title(label)
+    ax.set_title(label+"\n")
     ax.set_xlabel("Phase (Year)", fontsize=16)
     ax.set_ylabel("Millions $", fontsize=16)
     ax.set_xticks(range(len(df_result.columns)))
