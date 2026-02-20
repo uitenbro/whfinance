@@ -7,11 +7,11 @@ import time
 # so outputs remain comparable when Eterna is disabled.
 dragonfly_scenarios = [
     {
-        "label": "Dragonfly 125+25%",
+        "label": "Dragonfly 125+35%",
         "price": 45000,             # $ per unit revenue
         "cost": 10000,               # $ per unit cost
         "initial_units": 125,       # units sold in first sales year
-        "growth": 1.25,             # multiplicative growth factor (compounded, int-rounded each year)
+        "growth": 1.35,             # multiplicative growth factor (compounded, int-rounded each year)
         "maturation_year": 2,       # year when validation is complete
         "maturation_cost": 4000000, # $ cost in maturation year
     },
@@ -38,15 +38,25 @@ eterna_service_scenarios = [
         "baseline_cost": 500000,           # $ fixed annual ops cost (overhead) for Eterna (infrastructure repair and additonal Eterna vechicles)
         "maturation_year": 2,       # year when validation is complete
         "maturation_cost": 6*300000+2000000 # $ cost in maturation year (fleet cost at $300k each Eterna) +$2M validation campaign
+    },
+    {
+        "label": "Eterna 4/wk Services DoD yr 4", # 1 Eterna + 1 operator per mission
+        "missions_per_year": 4*52,            # missions in first Eterna service year
+        "mission_growth_per_year": 52,      # +missions each subsequent year (integer)
+        "avg_revenue_per_mission": 55000, # $ per mission revenue
+        "avg_cost_per_mission": 20000,     # $ per mission variable cost 24x7 = hrs x fte_cost_per/52/40 = $$/mission + materials
+        "baseline_cost": 500000,           # $ fixed annual ops cost (overhead) for Eterna (infrastructure repair and additonal Eterna vechicles)
+        "maturation_year": 4,       # year when validation is complete
+        "maturation_cost": 6*300000+2000000 # $ cost in maturation year (fleet cost at $300k each Eterna) +$2M validation campaign
     }
 ]
 ravenity_scenarios = [
     {
-        "label": "Ravenity 250+25%",
+        "label": "Ravenity 250+35%",
         "price": 20000,             # $ per unit revenue
         "cost": 5000,               # $ per unit cost
         "initial_units": 250,       # units sold in first sales year
-        "growth": 1.25,             # multiplicative growth factor (compounded, int-rounded each year)
+        "growth": 1.35,             # multiplicative growth factor (compounded, int-rounded each year)
         #"maturation_year": 2,       # year when validation is complete - from financial scenario
         #"maturation_cost": 4000000, # $ cost in maturation year - from financial scenario
     },
@@ -71,19 +81,14 @@ financial_scenarios = [
 
 # Choose which combo(s) to run (no comprehensive looping required)
 scenario_combinations = [
-    # {
-    #     "dragonfly": "Dragonfly Blue 150+20%", # set to None to disable Dragonfly
-    #     "eterna": "Eterna 2+2 Services",  # set to None to disable Eterna
-    #     "finance": "Scale to 11 FTE",
-    # },
     { # Current business plan scen for Ravenity only
         "dragonfly": None,
         "eterna": None,  # set to None to disable Eterna
-        "ravenity": "Ravenity 250+25%", # set to None to disable Ravenity
+        "ravenity": "Ravenity 250+35%", # set to None to disable Ravenity
         "finance": "Scale to 11 FTE",
     },
     { # Current business plan scen for Dragonfly only
-        "dragonfly": "Dragonfly 125+25%", # set to None to disable Dragonfly
+        "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
         "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
         "ravenity": None, # set to None to disable Ravenity
         "finance": "Scale to 11 FTE",
@@ -92,6 +97,12 @@ scenario_combinations = [
         "dragonfly": None, # set to None to disable Dragonfly
         "eterna": "Eterna 4/wk Services DoD", # DoD Eterna only
         "ravenity": None, # set to None to disable Ravenity
+        "finance": "Scale to 11 FTE",
+    },
+    { # Current business plan scenario for all 3 products together
+        "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
+        "eterna": "Eterna 4/wk Services DoD", # DoD Eterna 
+        "ravenity": "Ravenity 250+35%", # set to None to disable Ravenity
         "finance": "Scale to 11 FTE",
     },
 ]
