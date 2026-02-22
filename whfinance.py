@@ -52,30 +52,38 @@ eterna_service_scenarios = [
 ]
 ravenity_scenarios = [
     {
-        "label": "Ravenity 250+35%",
-        "price": 20000,             # $ per unit revenue
-        "cost": 5000,               # $ per unit cost
-        "initial_units": 250,       # units sold in first sales year
+        "label": "Ravenity 2500+35%",
+        "price": 1500,             # $ per unit revenue
+        "cost": 500,               # $ per unit cost
+        "initial_units": 2500,       # units sold in first sales year
         "growth": 1.35,             # multiplicative growth factor (compounded, int-rounded each year)
-        #"maturation_year": 2,       # year when validation is complete - from financial scenario
-        #"maturation_cost": 4000000, # $ cost in maturation year - from financial scenario
+        "maturation_year": 1,       # year when avionics validation is complete
+        "maturation_cost": 2000000, # $ cost in maturation year
+    },
+]
+sparv_scenarios = [
+    {
+        "label": "SparV 1500+25%",
+        "price": 5000,              # $ per unit revenue
+        "cost": 2500,               # $ per unit cost (COGS)
+        "initial_units": 1500,      # units sold in first sales year
+        "growth": 1.25,             # multiplicative growth factor (compounded, int-rounded each year)
+        "start_year": 1,            # first sales year (no pre-sales maturation period)
+        "maturation_cost": 1500000,  # $ one-time cost applied in start_year
     },
 ]
 # Finance & maturation inputs
 financial_scenarios = [
     {
         "label": "Scale to 11 FTE",
-        # FTEs by year (10 years)
-        "fte_count_by_year": [5, 9, 11, 11, 11, 11, 11, 11, 11, 11],
+        # FTEs by year (7 years)
+        "fte_count_by_year": [5, 9, 11, 11, 11, 11, 11],
         "fte_cost_per": 212500,    # $/FTE/year (fully loaded)
-        "business_dev_cost_year": [600000, 750000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000, 1000000], # $/year for business development
-        "sw_development_customers": [0, 3, 5, 5, 5, 5, 5, 5, 5, 5], # customers by year
+        "business_dev_cost_year": [600000, 750000, 1000000, 1000000, 1000000, 1000000, 1000000], # $/year for business development
+        "sw_development_customers": [0, 3, 5, 5, 5, 5, 5], # customers by year
         "sw_revenue_per_customer_per_year": 1880 * 150, # one developer per customer, $150/hr for year
         "other_cost": 400000,      # $/year
         "grant_revenue": 100000,   # $/year
-        # Maturation costs applied in their specified years
-        "maturation_year_avionics": 2, # year when avionics validation is complete
-        "maturation_cost_avionics": 2000000, # $ cost in maturation year 
     }
 ]
 
@@ -84,33 +92,58 @@ scenario_combinations = [
     { # Current business plan scen for Ravenity only
         "dragonfly": None,
         "eterna": None,  # set to None to disable Eterna
-        "ravenity": "Ravenity 250+35%", # set to None to disable Ravenity
+        "ravenity": "Ravenity 2500+35%", # set to None to disable Ravenity
+        "sparv": None,   # set to None to disable SparV
         "finance": "Scale to 11 FTE",
     },
-    { # Current business plan scen for Dragonfly only
-        "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
-        "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
-        "ravenity": None, # set to None to disable Ravenity
-        "finance": "Scale to 11 FTE",
-    },    
-    { # Current business plan scen for Eterna only
-        "dragonfly": None, # set to None to disable Dragonfly
-        "eterna": "Eterna 4/wk Services DoD", # DoD Eterna only
-        "ravenity": None, # set to None to disable Ravenity
+    # { # Current business plan scen for Dragonfly only
+    #     "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
+    #     "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
+    #     "ravenity": None, # set to None to disable Ravenity
+    #     "sparv": None,   # set to None to disable SparV
+    #     "finance": "Scale to 11 FTE",
+    # },
+    # { # Current business plan scen for Eterna only
+    #     "dragonfly": None, # set to None to disable Dragonfly
+    #     "eterna": "Eterna 4/wk Services DoD", # DoD Eterna only
+    #     "ravenity": None, # set to None to disable Ravenity
+    #     "sparv": None,   # set to None to disable SparV
+    #     "finance": "Scale to 11 FTE",
+    # },
+    # { # Current business plan scenario for all 3 products together
+    #     "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
+    #     "eterna": "Eterna 4/wk Services DoD", # DoD Eterna
+    #     "ravenity": "Ravenity 2500+35%", # set to None to disable Ravenity
+    #     "sparv": None,   # set to None to disable SparV
+    #     "finance": "Scale to 11 FTE",
+    # },
+    { # SparV only
+        "dragonfly": None,
+        "eterna": None,
+        "ravenity": None,
+        "sparv": "SparV 1500+25%",
         "finance": "Scale to 11 FTE",
     },
-    { # Current business plan scenario for all 3 products together
-        "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
-        "eterna": "Eterna 4/wk Services DoD", # DoD Eterna 
-        "ravenity": "Ravenity 250+35%", # set to None to disable Ravenity
+    # { # All 4 products together
+    #     "dragonfly": "Dragonfly 125+35%",
+    #     "eterna": "Eterna 4/wk Services DoD",
+    #     "ravenity": "Ravenity 2500+35%",
+    #     "sparv": "SparV 1500+25%",
+    #     "finance": "Scale to 11 FTE",
+    # },
+        { # Ravenity + SparV products together
+        "dragonfly": None,
+        "eterna": None,
+        "ravenity": "Ravenity 2500+35%",
+        "sparv": "SparV 1500+25%",
         "finance": "Scale to 11 FTE",
     },
 ]
 
-TOTAL_YEARS = 10
+TOTAL_YEARS = 7
 
 
-def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scenario):
+def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, finance_scenario):
     rows = []
     cum_cashflow = 0.0
     cum_cost = 0.0
@@ -120,7 +153,7 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scen
     # Eterna starts the year AFTER its maturation year, if configured
     eterna_start_year = None
     if eterna_scenario:
-        eterna_start_year = eterna_scenario["maturation_year"] + 1 
+        eterna_start_year = eterna_scenario["maturation_year"] + 1
 
     # Pre-compute Dragonfly units per year using original compounding & int rounding logic
     dragonfly_units_by_year = [0] * TOTAL_YEARS
@@ -138,11 +171,22 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scen
     if ravenity_scenario:
         units = 0
         for year in range(1, TOTAL_YEARS + 1):
-            if year == finance_scenario["maturation_year_avionics"] + 1:  # first sales year after maturation
+            if year == ravenity_scenario["maturation_year"] + 1:  # first sales year after maturation
                 units = ravenity_scenario["initial_units"]
-            elif year > finance_scenario["maturation_year_avionics"] + 1:  # subsequent sales years
+            elif year > ravenity_scenario["maturation_year"] + 1:  # subsequent sales years
                 units = int(units * ravenity_scenario["growth"])
             ravenity_units_by_year[year - 1] = units
+
+    # Pre-compute SparV units per year; sales begin at start_year with 25% annual growth
+    sparv_units_by_year = [0] * TOTAL_YEARS
+    if sparv_scenario:
+        units = 0
+        for year in range(1, TOTAL_YEARS + 1):
+            if year == sparv_scenario["start_year"]:
+                units = sparv_scenario["initial_units"]
+            elif year > sparv_scenario["start_year"]:
+                units = int(units * sparv_scenario["growth"])
+            sparv_units_by_year[year - 1] = units
 
     for year in range(1, TOTAL_YEARS + 1):
         # Base OPEX / grants
@@ -155,14 +199,18 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scen
 
         # Maturation in specified years
         maturation_cost = 0
-        if year == finance_scenario["maturation_year_avionics"]:
-            maturation_cost += finance_scenario["maturation_cost_avionics"]
+        if ravenity_scenario:
+            if year == ravenity_scenario["maturation_year"]:
+                maturation_cost += ravenity_scenario["maturation_cost"]
         if df_scenario:
             if year == df_scenario["maturation_year"]:
                 maturation_cost += df_scenario["maturation_cost"]
         if eterna_scenario:
             if year == eterna_scenario["maturation_year"]:
                 maturation_cost += eterna_scenario["maturation_cost"]
+        if sparv_scenario:
+            if year == sparv_scenario["start_year"]:
+                maturation_cost += sparv_scenario["maturation_cost"]
 
         # Dragonfly sales
         uav_units = 0
@@ -191,10 +239,19 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scen
             computer_units = ravenity_units_by_year[year - 1]
             computer_revenue = computer_units * ravenity_scenario["price"]
             computer_cost = computer_units * ravenity_scenario["cost"]
-        
+
+        # SparV sales
+        sparv_units = 0
+        sparv_revenue = 0
+        sparv_cost = 0
+        if sparv_scenario:
+            sparv_units = sparv_units_by_year[year - 1]
+            sparv_revenue = sparv_units * sparv_scenario["price"]
+            sparv_cost = sparv_units * sparv_scenario["cost"]
+
         # Totals & cashflow
-        total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenue + computer_revenue
-        total_cost = fte_cost + business_dev_cost + other_cost + uav_cost + eterna_cost + maturation_cost + computer_cost
+        total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenue + computer_revenue + sparv_revenue
+        total_cost = fte_cost + business_dev_cost + other_cost + uav_cost + eterna_cost + maturation_cost + computer_cost + sparv_cost
         net_cashflow = total_revenue - total_cost
 
         cum_cashflow += net_cashflow
@@ -220,6 +277,9 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scen
             "Ravenity Units": computer_units,
             "Ravenity Cost": computer_cost / 1e6,
             "Ravenity Revenue": computer_revenue / 1e6,
+            "SparV Units": sparv_units,
+            "SparV Cost": sparv_cost / 1e6,
+            "SparV Revenue": sparv_revenue / 1e6,
             "Maturation Cost": maturation_cost / 1e6,
             "Total Cost": total_cost / 1e6,
             "Total Revenue": total_revenue / 1e6,
@@ -246,6 +306,7 @@ for combo in scenario_combinations:
     df_scenario =     next((d for d in dragonfly_scenarios      if combo["dragonfly"] and d["label"] == combo["dragonfly"]), None)
     eterna_scenario = next((e for e in eterna_service_scenarios if combo["eterna"]    and e["label"] == combo["eterna"]), None)
     ravenity_scenario = next((r for r in ravenity_scenarios if combo["ravenity"] and r["label"] == combo["ravenity"]), None)
+    sparv_scenario =  next((s for s in sparv_scenarios if combo.get("sparv") and s["label"] == combo["sparv"]), None)
     finance_scenario = next(f for f in financial_scenarios if f["label"] == combo["finance"])
 
     label = finance_scenario['label']
@@ -255,8 +316,10 @@ for combo in scenario_combinations:
         label += " + %s" % eterna_scenario['label']
     if ravenity_scenario:
         label += " + %s" % ravenity_scenario['label']
+    if sparv_scenario:
+        label += " + %s" % sparv_scenario['label']
 
-    df_result, investment, total_return, roi, moic, payback_year = run_simulation(df_scenario, eterna_scenario, ravenity_scenario, finance_scenario)
+    df_result, investment, total_return, roi, moic, payback_year = run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, finance_scenario)
 
     # --- Summary header (keep concise, include key inputs) ---
     print("\n--- Financial Summary Table (%s) ---" % label)
@@ -278,8 +341,13 @@ for combo in scenario_combinations:
     if ravenity_scenario:
         print("Ravenity Price per Unit: $%s" % format(ravenity_scenario['price'], ","))
         print("Ravenity Cost per Unit:  $%s" % format(ravenity_scenario['cost'], ","))
-        print("Initial Ravenity Units Sold (Year %s): %d" % (finance_scenario['maturation_year_avionics'] + 1, ravenity_scenario['initial_units']))
+        print("Initial Ravenity Units Sold (Year %s): %d" % (ravenity_scenario['maturation_year'] + 1, ravenity_scenario['initial_units']))
         print("Ravenity Sales Growth Rate: %d%%" % int((ravenity_scenario['growth'] - 1) * 100))
+    if sparv_scenario:
+        print("SparV Price per Unit:    $%s" % format(sparv_scenario['price'], ","))
+        print("SparV Cost per Unit:     $%s" % format(sparv_scenario['cost'], ","))
+        print("Initial SparV Units Sold (Year %d): %d" % (sparv_scenario['start_year'], sparv_scenario['initial_units']))
+        print("SparV Sales Growth Rate: %d%%" % int((sparv_scenario['growth'] - 1) * 100))
 
     print("\n--- Investor Summary Table (%s) ---" % label)
     print("Total Investment:   $%s" % format(investment * 1e6, ",.0f"))
@@ -301,7 +369,7 @@ for combo in scenario_combinations:
         for row in df_result.index:
             line = "%-19s" % row
             for col in df_result.columns:
-                if row in ("Dragonfly Units", "Ravenity Units", "Eterna Missions"):
+                if row in ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units"):
                     line += "%7d " % int(df_result.loc[row, col])
                 else:
                     line += "%7.2f " % df_result.loc[row, col]
