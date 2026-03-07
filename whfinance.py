@@ -75,27 +75,27 @@ sparv_scenarios = [
 # Finance & maturation inputs
 financial_scenarios = [
     {
-        "label": "Scale to 11 FTE",
+        "label": "Scale to 22 Engr and $1.2M Other Costs",
         # FTEs by year (7 years)
-        "fte_count_by_year": [5, 9, 11, 11, 11, 11, 11],
+        "fte_count_by_year": [5, 11, 18, 22, 22, 22, 22],
         "fte_cost_per": 212500,    # $/FTE/year (fully loaded)
         "business_dev_cost_year": [600000, 750000, 1000000, 1000000, 1000000, 1000000, 1000000], # $/year for business development
         "sw_development_customers": [0, 3, 5, 5, 5, 5, 5], # customers by year
         "sw_revenue_per_customer_per_year": 1880 * 150, # one developer per customer, $150/hr for year
-        "other_cost": 400000,      # $/year
+        "other_cost_by_year": [400000, 800000, 1200000, 1200000, 1200000, 1200000, 1200000],  # $/year #TODO add rent for manufacturing space once we have products in production
         "grant_revenue": 100000,   # $/year
     }
 ]
 
 # Choose which combo(s) to run (no comprehensive looping required)
 scenario_combinations = [
-    { # Current business plan scen for Ravenity only
-        "dragonfly": None,
-        "eterna": None,  # set to None to disable Eterna
-        "ravenity": "Ravenity 2500+35%", # set to None to disable Ravenity
-        "sparv": None,   # set to None to disable SparV
-        "finance": "Scale to 11 FTE",
-    },
+    # { # Current business plan scen for Ravenity only
+    #     "dragonfly": None,
+    #     "eterna": None,  # set to None to disable Eterna
+    #     "ravenity": "Ravenity 2500+35%", # set to None to disable Ravenity
+    #     "sparv": None,   # set to None to disable SparV
+    #     "finance": "Scale to 22 Engr and $1.2M Other Costs",
+    # },
     # { # Current business plan scen for Dragonfly only
     #     "dragonfly": "Dragonfly 125+35%", # set to None to disable Dragonfly
     #     "eterna": None, #"Eterna 2+2 Services",  # set to None to disable Eterna
@@ -117,27 +117,27 @@ scenario_combinations = [
     #     "sparv": None,   # set to None to disable SparV
     #     "finance": "Scale to 11 FTE",
     # },
-    { # SparV only
-        "dragonfly": None,
-        "eterna": None,
-        "ravenity": None,
+    # { # SparV only
+    #     "dragonfly": None,
+    #     "eterna": None,
+    #     "ravenity": None,
+    #     "sparv": "SparV 1500+25%",
+    #     "finance": "Scale to 11 FTE",
+    # },
+    { # All 4 products together
+        "dragonfly": "Dragonfly 125+35%",
+        "eterna": "Eterna 4/wk Services DoD",
+        "ravenity": "Ravenity 2500+35%",
         "sparv": "SparV 1500+25%",
-        "finance": "Scale to 11 FTE",
+        "finance": "Scale to 22 Engr and $1.2M Other Costs",
     },
-    # { # All 4 products together
-    #     "dragonfly": "Dragonfly 125+35%",
-    #     "eterna": "Eterna 4/wk Services DoD",
+    # { # Ravenity + SparV products together
+    #     "dragonfly": None,
+    #     "eterna": None,
     #     "ravenity": "Ravenity 2500+35%",
     #     "sparv": "SparV 1500+25%",
     #     "finance": "Scale to 11 FTE",
     # },
-        { # Ravenity + SparV products together
-        "dragonfly": None,
-        "eterna": None,
-        "ravenity": "Ravenity 2500+35%",
-        "sparv": "SparV 1500+25%",
-        "finance": "Scale to 11 FTE",
-    },
 ]
 
 TOTAL_YEARS = 7
@@ -193,7 +193,7 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
         fte_count = finance_scenario["fte_count_by_year"][year - 1]
         fte_cost = fte_count * finance_scenario["fte_cost_per"]
         business_dev_cost = finance_scenario["business_dev_cost_year"][year - 1]
-        other_cost = finance_scenario["other_cost"]
+        other_cost = finance_scenario["other_cost_by_year"][year - 1]
         grant_revenue = finance_scenario["grant_revenue"]
         sw_development_revenue = finance_scenario["sw_development_customers"][year - 1] * finance_scenario["sw_revenue_per_customer_per_year"]
 
@@ -262,8 +262,8 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
             payback_year = year
 
         rows.append({
-            "FTEs": fte_count,
-            "Total FTE Cost": fte_cost / 1e6,
+            "Engineers": fte_count,
+            "Total Engr Cost": fte_cost / 1e6,
             "Business Dev Cost": business_dev_cost / 1e6,
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
@@ -292,8 +292,28 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
     # Build table with metrics as rows, years as columns
     df = pd.DataFrame(rows, index=["Year %d" % i for i in range(1, TOTAL_YEARS + 1)]).T
 
-    # Investment / Return metrics derived from cumulative cashflow
-    total_investment = -min(0, df.loc["Cumul Oper P/L"].min())
+    # Investment needed: production COGS and revenue are proximate (self-funding).
+    # Investment only covers non-revenue-generating overhead costs:
+    #   fte + biz_dev + other + maturation
+    # Offset by: grants + sw_dev revenue + product gross margins (all arrive end-of-year).
+    # carryover = prior year ending cash balance available at start of next year.
+    overhead_costs = (df.loc["Total Engr Cost"] + df.loc["Business Dev Cost"]
+                      + df.loc["Other Costs"] + df.loc["Maturation Cost"])
+    product_cogs = (df.loc["Dragonfly Cost"] + df.loc["Eterna Cost"]
+                    + df.loc["Ravenity Cost"] + df.loc["SparV Cost"])
+    available_revenue = df.loc["Total Revenue"] - product_cogs  # grants + sw_dev + product gross margins
+
+    carryover = 0.0
+    yearly_investment = []
+    for col in df.columns:
+        oh = overhead_costs[col]
+        av = available_revenue[col]
+        inv_y = max(0.0, oh - carryover)
+        yearly_investment.append(inv_y)
+        carryover = max(0.0, carryover + inv_y - oh + av)
+    df.loc["Investment Needed"] = yearly_investment
+
+    total_investment = sum(yearly_investment)
     total_return = df.loc["Cumul Oper P/L"].iloc[-1]
     roi = (total_return / total_investment) if total_investment else 0.0
     moic = ((total_return + total_investment) / total_investment) if total_investment else 0.0
@@ -415,7 +435,7 @@ for combo in scenario_combinations:
             va = 'bottom'
         ax.text(idx, y_pos, f"{val:.2f}", ha='center', va=va, fontsize=13, color="black")
 
-    ax.set_title(label+"\n")
+    ax.set_title(label+"\n", fontsize=12)
     ax.set_xlabel("Phase (Year)", fontsize=16)
     ax.set_ylabel("Millions $", fontsize=16)
     ax.set_xticks(range(len(df_result.columns)))
