@@ -11,6 +11,7 @@ from gsheet_io import (
     CREDENTIALS_FILE, TOKEN_FILE, CONFIG_FILE, TOTAL_YEARS,
     TAB_DRAGONFLY, TAB_ETERNA, TAB_RAVENITY, TAB_SPARV,
     TAB_FINANCE, TAB_COMBINATIONS, TAB_OUTPUT,
+    TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN, WEIGHT_TO_ROW,
 )
 
 SPREADSHEET_TITLE = "WHFinance Scenarios"
@@ -25,6 +26,7 @@ dragonfly_scenarios = [
         "initial_units": 125,
         "growth": 1.35,
         "maturation_year": 2,
+        "first_sales_year": 3,
         "maturation_cost": 4000000,
     },
 ]
@@ -38,6 +40,7 @@ eterna_service_scenarios = [
         "avg_cost_per_mission": 10000,
         "baseline_cost": 25000,
         "maturation_year": 3,
+        "first_sales_year": 4,
         "maturation_cost": 4000000,
     },
     {
@@ -48,6 +51,7 @@ eterna_service_scenarios = [
         "avg_cost_per_mission": 20000,
         "baseline_cost": 500000,
         "maturation_year": 2,
+        "first_sales_year": 3,
         "maturation_cost": 6 * 300000 + 2000000,
     },
     {
@@ -58,6 +62,7 @@ eterna_service_scenarios = [
         "avg_cost_per_mission": 20000,
         "baseline_cost": 500000,
         "maturation_year": 4,
+        "first_sales_year": 5,
         "maturation_cost": 6 * 300000 + 2000000,
     },
 ]
@@ -70,6 +75,7 @@ ravenity_scenarios = [
         "initial_units": 2500,
         "growth": 1.35,
         "maturation_year": 1,
+        "first_sales_year": 2,
         "maturation_cost": 2000000,
     },
 ]
@@ -81,7 +87,8 @@ sparv_scenarios = [
         "cost": 2500,
         "initial_units": 1500,
         "growth": 1.25,
-        "start_year": 1,
+        "maturation_year": 1,
+        "first_sales_year": 1,
         "maturation_cost": 1500000,
     },
 ]
@@ -117,24 +124,24 @@ def _transpose(field_names, scenarios, val_fn):
 
 
 def _populate_dragonfly(ws, scenarios):
-    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "maturation_cost"]
+    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "first_sales_year", "maturation_cost"]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
 def _populate_eterna(ws, scenarios):
     fields = ["label", "missions_per_year", "mission_growth_per_year",
               "avg_revenue_per_mission", "avg_cost_per_mission",
-              "baseline_cost", "maturation_year", "maturation_cost"]
+              "baseline_cost", "maturation_year", "first_sales_year", "maturation_cost"]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
 def _populate_ravenity(ws, scenarios):
-    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "maturation_cost"]
+    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "first_sales_year", "maturation_cost"]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
 def _populate_sparv(ws, scenarios):
-    fields = ["label", "price", "cost", "initial_units", "growth", "start_year", "maturation_cost"]
+    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "first_sales_year", "maturation_cost"]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
@@ -155,6 +162,25 @@ def _populate_finance(ws, scenarios):
         return s[f]
 
     ws.update("A1", _transpose(all_fields, scenarios, val))
+
+
+def _populate_monthly_timing(ws):
+    EVEN       = [1] * 24
+    MATURATION = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,   # yr 1: hits Mo 6
+                  0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]   # yr 2: hits Mo 18
+
+    settings_rows = [
+        ["start_year",  2026],
+        ["start_month", 1],
+        ["num_months",  24],
+    ]
+    mo_headers = [f"Mo {i}" for i in range(1, 25)]
+    header_row = [["category"] + mo_headers]
+    weight_rows = [
+        [cat] + (MATURATION if cat == "Maturation Cost" else EVEN)
+        for cat in WEIGHT_TO_ROW
+    ]
+    ws.update("A1", settings_rows + [[]] + header_row + weight_rows)
 
 
 def _populate_combinations(ws, combinations):
@@ -182,7 +208,8 @@ def main():
     print(f"Created spreadsheet: {sh.url}\n")
 
     sh.sheet1.update_title(TAB_DRAGONFLY)
-    for title in [TAB_ETERNA, TAB_RAVENITY, TAB_SPARV, TAB_FINANCE, TAB_COMBINATIONS, TAB_OUTPUT]:
+    for title in [TAB_ETERNA, TAB_RAVENITY, TAB_SPARV, TAB_FINANCE, TAB_COMBINATIONS,
+                  TAB_OUTPUT, TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN]:
         sh.add_worksheet(title=title, rows=100, cols=40)
 
     print(f"Populating {TAB_DRAGONFLY}...")
@@ -202,6 +229,9 @@ def main():
 
     print(f"Populating {TAB_COMBINATIONS}...")
     _populate_combinations(sh.worksheet(TAB_COMBINATIONS), scenario_combinations)
+
+    print(f"Populating {TAB_MONTHLY_TIMING}...")
+    _populate_monthly_timing(sh.worksheet(TAB_MONTHLY_TIMING))
 
     with open(CONFIG_FILE, "w") as f:
         json.dump({"spreadsheet_id": sh.id}, f, indent=2)
