@@ -6,6 +6,7 @@ Re-running will create a new spreadsheet and overwrite gsheet_config.json.
 """
 
 import json
+import os
 import gspread
 from gsheet_io import (
     CREDENTIALS_FILE, TOKEN_FILE, CONFIG_FILE, TOTAL_YEARS,
@@ -233,8 +234,28 @@ def main():
     print(f"Populating {TAB_MONTHLY_TIMING}...")
     _populate_monthly_timing(sh.worksheet(TAB_MONTHLY_TIMING))
 
+    # Load existing config to carry forward history
+    history = []
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE) as f:
+            old = json.load(f)
+        if old.get("spreadsheet_id"):
+            history = old.get("history", [])
+            history.append({
+                "spreadsheet_id": old["spreadsheet_id"],
+                "url":            old.get("url", ""),
+                "created_at":     old.get("created_at", ""),
+            })
+
+    from datetime import datetime, timezone
+    config = {
+        "spreadsheet_id": sh.id,
+        "url":            sh.url,
+        "created_at":     datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        "history":        history,
+    }
     with open(CONFIG_FILE, "w") as f:
-        json.dump({"spreadsheet_id": sh.id}, f, indent=2)
+        json.dump(config, f, indent=2)
 
     print(f"\nDone. Spreadsheet ID saved to '{CONFIG_FILE}'.")
     print(f"Open your sheet: {sh.url}")
