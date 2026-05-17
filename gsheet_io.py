@@ -190,13 +190,6 @@ def write_output(sh, results):
         payback_str = f"Year {payback_year}" if payback_year else f"Not achieved in {TOTAL_YEARS} years"
 
         all_rows.append([f"=== {label} ==="])
-        all_rows.append(["Total Investment",  f"${investment * 1e6:,.0f}"])
-        all_rows.append(["Total Return",      f"${total_return * 1e6:,.0f}"])
-        all_rows.append(["ROI",               f"{roi:.2f}x"])
-        all_rows.append(["MOIC",              f"{moic:.2f}x"])
-        all_rows.append(["Payback Period",    payback_str])
-        all_rows.append([])
-
         all_rows.append(["Metric"] + list(df_result.columns))
         for row_name in df_result.index:
             row_vals = [row_name]

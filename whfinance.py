@@ -160,6 +160,13 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
         carryover = max(0.0, carryover + inv_y - oh + av)
     df.loc["Capital Needed"] = yearly_investment
 
+    cumulative_capital = []
+    running = 0.0
+    for inv in yearly_investment:
+        running += inv
+        cumulative_capital.append(running)
+    df.loc["Cumulative Capital"] = cumulative_capital
+
     total_investment = sum(yearly_investment)
     total_return = df.loc["Cumul Oper P/L"].iloc[-1]
     roi = (total_return / total_investment) if total_investment else 0.0
