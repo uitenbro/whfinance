@@ -158,7 +158,7 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
         inv_y = max(0.0, oh - carryover)
         yearly_investment.append(inv_y)
         carryover = max(0.0, carryover + inv_y - oh + av)
-    df.loc["Investment Needed"] = yearly_investment
+    df.loc["Capital Needed"] = yearly_investment
 
     total_investment = sum(yearly_investment)
     total_return = df.loc["Cumul Oper P/L"].iloc[-1]
@@ -343,8 +343,8 @@ def generate_monthly_plan(df_result, timing):
         row["Total Revenue"]     = total_revenue
         row["Net"]               = net
         row["Cumul Net"]         = cum_net
-        row["Investment Needed"] = inv
-        row["Cumul Investment"]  = cum_investment
+        row["Capital Needed"] = inv
+        row["Cumulative Capital"]  = cum_investment
         monthly_rows.append(row)
 
     return monthly_rows
