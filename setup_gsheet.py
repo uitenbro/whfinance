@@ -3,6 +3,8 @@
 
 Run this once after setting up credentials.json (see GSHEET_SETUP.md).
 Re-running will create a new spreadsheet and overwrite gsheet_config.json.
+
+All start months in scenario tabs are plan-relative (1 = first month of the plan).
 """
 
 import json
@@ -12,137 +14,167 @@ from gsheet_io import (
     CREDENTIALS_FILE, TOKEN_FILE, CONFIG_FILE, TOTAL_YEARS,
     TAB_DRAGONFLY, TAB_ETERNA, TAB_RAVENITY, TAB_SPARV,
     TAB_FINANCE, TAB_COMBINATIONS, TAB_OUTPUT,
-    TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN, WEIGHT_TO_ROW,
+    TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN,
 )
 
 SPREADSHEET_TITLE = "WHFinance Scenarios"
 
-# ── Seed data (mirrors current whfinance.py hardcoded values) ──────────────────
+# ── Seed data ─────────────────────────────────────────────────────────────────────
+# All *_start_month values are plan-relative: 1 = first month of the plan (e.g. Jan 2026).
+# maturation_duration_months: cost is spread evenly over this many months.
+# revenue_lag_months: cash received this many months after the COGS month.
 
 dragonfly_scenarios = [
     {
-        "label": "Dragonfly 125+35%",
-        "price": 45000,
-        "cost": 10000,
-        "initial_units": 125,
-        "growth": 1.35,
-        "maturation_year": 2,
-        "first_sales_year": 3,
-        "maturation_cost": 4000000,
+        "label":                      "Dragonfly 125+35%",
+        "price":                      45000,
+        "cost":                       10000,
+        "initial_units":              125,
+        "growth":                     1.35,
+        "maturation_cost":            4000000,
+        "maturation_start_month":     13,   # month 13 = start of plan year 2
+        "maturation_duration_months": 12,
+        "cogs_start_month":           25,   # month 25 = start of plan year 3
+        "revenue_lag_months":         0,
     },
 ]
 
 eterna_service_scenarios = [
     {
-        "label": "Eterna 1/wk+2/wk Services",
-        "missions_per_year": 52,
-        "mission_growth_per_year": 104,
-        "avg_revenue_per_mission": 50000,
-        "avg_cost_per_mission": 10000,
-        "baseline_cost": 25000,
-        "maturation_year": 3,
-        "first_sales_year": 4,
-        "maturation_cost": 4000000,
+        "label":                      "Eterna 1/wk+2/wk Services",
+        "missions_per_year":          52,
+        "mission_growth_per_year":    104,
+        "avg_revenue_per_mission":    50000,
+        "avg_cost_per_mission":       10000,
+        "baseline_cost":              25000,
+        "maturation_cost":            4000000,
+        "maturation_start_month":     25,   # month 25 = start of plan year 3
+        "maturation_duration_months": 12,
+        "cogs_start_month":           37,   # month 37 = start of plan year 4
+        "revenue_lag_months":         0,
     },
     {
-        "label": "Eterna 4/wk Services DoD",
-        "missions_per_year": 4 * 52,
-        "mission_growth_per_year": 52,
-        "avg_revenue_per_mission": 55000,
-        "avg_cost_per_mission": 20000,
-        "baseline_cost": 500000,
-        "maturation_year": 2,
-        "first_sales_year": 3,
-        "maturation_cost": 6 * 300000 + 2000000,
+        "label":                      "Eterna 4/wk Services DoD",
+        "missions_per_year":          4 * 52,
+        "mission_growth_per_year":    52,
+        "avg_revenue_per_mission":    55000,
+        "avg_cost_per_mission":       20000,
+        "baseline_cost":              500000,
+        "maturation_cost":            6 * 300000 + 2000000,
+        "maturation_start_month":     13,   # month 13 = start of plan year 2
+        "maturation_duration_months": 12,
+        "cogs_start_month":           25,   # month 25 = start of plan year 3
+        "revenue_lag_months":         0,
     },
     {
-        "label": "Eterna 4/wk Services DoD yr 4",
-        "missions_per_year": 4 * 52,
-        "mission_growth_per_year": 52,
-        "avg_revenue_per_mission": 55000,
-        "avg_cost_per_mission": 20000,
-        "baseline_cost": 500000,
-        "maturation_year": 4,
-        "first_sales_year": 5,
-        "maturation_cost": 6 * 300000 + 2000000,
+        "label":                      "Eterna 4/wk Services DoD yr 4",
+        "missions_per_year":          4 * 52,
+        "mission_growth_per_year":    52,
+        "avg_revenue_per_mission":    55000,
+        "avg_cost_per_mission":       20000,
+        "baseline_cost":              500000,
+        "maturation_cost":            6 * 300000 + 2000000,
+        "maturation_start_month":     37,   # month 37 = start of plan year 4
+        "maturation_duration_months": 12,
+        "cogs_start_month":           49,   # month 49 = start of plan year 5
+        "revenue_lag_months":         0,
     },
 ]
 
 ravenity_scenarios = [
     {
-        "label": "Ravenity 2500+35%",
-        "price": 1500,
-        "cost": 500,
-        "initial_units": 2500,
-        "growth": 1.35,
-        "maturation_year": 1,
-        "first_sales_year": 2,
-        "maturation_cost": 2000000,
+        "label":                      "Ravenity 2500+35%",
+        "price":                      1500,
+        "cost":                       500,
+        "initial_units":              2500,
+        "growth":                     1.35,
+        "maturation_cost":            2000000,
+        "maturation_start_month":     1,    # month 1 = start of plan year 1
+        "maturation_duration_months": 12,
+        "cogs_start_month":           13,   # month 13 = start of plan year 2
+        "revenue_lag_months":         0,
     },
 ]
 
 sparv_scenarios = [
     {
-        "label": "SparV 1500+25%",
-        "price": 5000,
-        "cost": 2500,
-        "initial_units": 1500,
-        "growth": 1.25,
-        "maturation_year": 1,
-        "first_sales_year": 1,
-        "maturation_cost": 1500000,
+        "label":                      "SparV 1500+25%",
+        "price":                      5000,
+        "cost":                       2500,
+        "initial_units":              1500,
+        "growth":                     1.25,
+        "maturation_cost":            1500000,
+        "maturation_start_month":     1,    # month 1 = start of plan year 1
+        "maturation_duration_months": 12,
+        "cogs_start_month":           1,    # COGS begin same month as maturation
+        "revenue_lag_months":         0,
     },
 ]
 
 financial_scenarios = [
     {
-        "label": "Scale to 22 Engr and $1.2M Other Costs",
-        "fte_count_by_year": [5, 11, 18, 22, 22, 22, 22],
-        "fte_cost_per": 212500,
-        "business_dev_cost_year": [600000, 750000, 1000000, 1000000, 1000000, 1000000, 1000000],
-        "sw_development_customers": [0, 3, 5, 5, 5, 5, 5],
+        "label":                          "Scale to 22 Engr and $1.2M Other Costs",
+        "fte_count_by_year":              [5, 11, 18, 22, 22, 22, 22],
+        "fte_cost_per":                   212500,
+        "business_dev_cost_year":         [600000, 750000, 1000000, 1000000, 1000000, 1000000, 1000000],
+        "sw_development_customers":       [0, 3, 5, 5, 5, 5, 5],
         "sw_revenue_per_customer_per_year": 1880 * 150,
-        "other_cost_by_year": [400000, 800000, 1200000, 1200000, 1200000, 1200000, 1200000],
-        "grant_revenue": 100000,
+        "other_cost_by_year":             [400000, 800000, 1200000, 1200000, 1200000, 1200000, 1200000],
+        "grant_revenue":                  100000,
     },
 ]
 
 scenario_combinations = [
     {
         "dragonfly": "Dragonfly 125+35%",
-        "eterna": "Eterna 4/wk Services DoD",
-        "ravenity": "Ravenity 2500+35%",
-        "sparv": "SparV 1500+25%",
-        "finance": "Scale to 22 Engr and $1.2M Other Costs",
+        "eterna":    "Eterna 4/wk Services DoD",
+        "ravenity":  "Ravenity 2500+35%",
+        "sparv":     "SparV 1500+25%",
+        "finance":   "Scale to 22 Engr and $1.2M Other Costs",
     },
 ]
 
-# ── Populate helpers (transposed: col A = field names, subsequent cols = scenarios) ────
+# ── Populate helpers ──────────────────────────────────────────────────────────────
 
 def _transpose(field_names, scenarios, val_fn):
-    """Build a transposed row list: each row is [field_name, val_for_s1, val_for_s2, ...]."""
+    """Build transposed rows: each row is [field_name, val_s1, val_s2, ...]."""
     return [[f] + [val_fn(s, f) for s in scenarios] for f in field_names]
 
 
 def _populate_dragonfly(ws, scenarios):
-    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "first_sales_year", "maturation_cost"]
+    fields = [
+        "label", "price", "cost", "initial_units", "growth",
+        "maturation_cost", "maturation_start_month", "maturation_duration_months",
+        "cogs_start_month", "revenue_lag_months",
+    ]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
 def _populate_eterna(ws, scenarios):
-    fields = ["label", "missions_per_year", "mission_growth_per_year",
-              "avg_revenue_per_mission", "avg_cost_per_mission",
-              "baseline_cost", "maturation_year", "first_sales_year", "maturation_cost"]
+    fields = [
+        "label", "missions_per_year", "mission_growth_per_year",
+        "avg_revenue_per_mission", "avg_cost_per_mission", "baseline_cost",
+        "maturation_cost", "maturation_start_month", "maturation_duration_months",
+        "cogs_start_month", "revenue_lag_months",
+    ]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
 def _populate_ravenity(ws, scenarios):
-    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "first_sales_year", "maturation_cost"]
+    fields = [
+        "label", "price", "cost", "initial_units", "growth",
+        "maturation_cost", "maturation_start_month", "maturation_duration_months",
+        "cogs_start_month", "revenue_lag_months",
+    ]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
 def _populate_sparv(ws, scenarios):
-    fields = ["label", "price", "cost", "initial_units", "growth", "maturation_year", "first_sales_year", "maturation_cost"]
+    fields = [
+        "label", "price", "cost", "initial_units", "growth",
+        "maturation_cost", "maturation_start_month", "maturation_duration_months",
+        "cogs_start_month", "revenue_lag_months",
+    ]
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
@@ -166,23 +198,11 @@ def _populate_finance(ws, scenarios):
 
 
 def _populate_monthly_timing(ws):
-    EVEN       = [1] * 24
-    MATURATION = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,   # yr 1: hits Mo 6
-                  0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]   # yr 2: hits Mo 18
-
-    settings_rows = [
+    ws.update("A1", [
         ["start_year",  2026],
         ["start_month", 1],
-        ["num_months",  24],
-    ]
-    mo_headers = [f"Mo {i}" for i in range(1, 25)]
-    header_row = [["category"] + mo_headers]
-    MATURATION_CATS = {"Dragonfly Maturation", "Eterna Maturation", "Ravenity Maturation", "SparV Maturation"}
-    weight_rows = [
-        [cat] + (MATURATION if cat in MATURATION_CATS else EVEN)
-        for cat in WEIGHT_TO_ROW
-    ]
-    ws.update("A1", settings_rows + [[]] + header_row + weight_rows)
+        ["num_months",  TOTAL_YEARS * 12],
+    ])
 
 
 def _populate_combinations(ws, combinations):
@@ -198,7 +218,7 @@ def _populate_combinations(ws, combinations):
     ws.update("A1", [[f] + values[f] for f in fields])
 
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────────────────
 
 def main():
     gc = gspread.oauth(

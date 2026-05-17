@@ -1,10 +1,8 @@
 import calendar as _cal
-from operator import lt
 import pandas as pd
 import matplotlib.pyplot as plt
 from gsheet_io import (
     TOTAL_YEARS,
-    WEIGHT_TO_ROW,
     MONTHLY_LINE_ITEMS,
     open_spreadsheet,
     read_dragonfly_scenarios,
@@ -19,165 +17,225 @@ from gsheet_io import (
 )
 
 
-def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, finance_scenario):
-    rows = []
-    cum_cashflow = 0.0
-    cum_cost = 0.0
-    cum_revenue = 0.0
-    payback_year = None
+def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, finance_scenario, timing):
+    """Monthly-first financial model. All start months are plan-relative (1 = first month of plan).
 
-    eterna_start_year = eterna_scenario["first_sales_year"] if eterna_scenario else None
+    Returns (df_result, monthly_rows, total_investment, total_return, roi, moic, payback_year).
+    """
+    start_year  = timing["start_year"]
+    start_month = timing["start_month"]
+    num_months  = timing["num_months"]
 
-    dragonfly_units_by_year = [0] * TOTAL_YEARS
-    if df_scenario:
-        units = 0
-        for year in range(1, TOTAL_YEARS + 1):
-            if year == df_scenario["first_sales_year"]:
-                units = df_scenario["initial_units"]
-            elif year > df_scenario["first_sales_year"]:
-                units = int(units * df_scenario["growth"])
-            dragonfly_units_by_year[year - 1] = units
+    def _product_units(scenario, m):
+        """Monthly units for a product-type scenario (Dragonfly/Ravenity/SparV)."""
+        if not scenario or m < 1 or m < scenario["cogs_start_month"]:
+            return 0.0
+        yrs = (m - scenario["cogs_start_month"]) // 12
+        return (scenario["initial_units"] / 12.0) * (scenario["growth"] ** yrs)
 
-    ravenity_units_by_year = [0] * TOTAL_YEARS
-    if ravenity_scenario:
-        units = 0
-        for year in range(1, TOTAL_YEARS + 1):
-            if year == ravenity_scenario["first_sales_year"]:
-                units = ravenity_scenario["initial_units"]
-            elif year > ravenity_scenario["first_sales_year"]:
-                units = int(units * ravenity_scenario["growth"])
-            ravenity_units_by_year[year - 1] = units
+    def _missions(scenario, m):
+        """Monthly missions for Eterna (linear annual growth)."""
+        if not scenario or m < 1 or m < scenario["cogs_start_month"]:
+            return 0.0
+        yrs = (m - scenario["cogs_start_month"]) // 12
+        return max(0.0, (scenario["missions_per_year"] + scenario["mission_growth_per_year"] * yrs) / 12.0)
 
-    sparv_units_by_year = [0] * TOTAL_YEARS
-    if sparv_scenario:
-        units = 0
-        for year in range(1, TOTAL_YEARS + 1):
-            if year == sparv_scenario["first_sales_year"]:
-                units = sparv_scenario["initial_units"]
-            elif year > sparv_scenario["first_sales_year"]:
-                units = int(units * sparv_scenario["growth"])
-            sparv_units_by_year[year - 1] = units
+    def _mat(scenario, m):
+        """Maturation cost spread evenly over its duration window."""
+        if not scenario:
+            return 0.0
+        ms  = scenario["maturation_start_month"]
+        dur = scenario["maturation_duration_months"]
+        return scenario["maturation_cost"] / dur if ms <= m < ms + dur else 0.0
 
-    for year in range(1, TOTAL_YEARS + 1):
-        fte_count = finance_scenario["fte_count_by_year"][year - 1]
-        fte_cost = fte_count * finance_scenario["fte_cost_per"]
-        business_dev_cost = finance_scenario["business_dev_cost_year"][year - 1]
-        other_cost = finance_scenario["other_cost_by_year"][year - 1]
-        grant_revenue = finance_scenario["grant_revenue"]
-        sw_development_revenue = (
-            finance_scenario["sw_development_customers"][year - 1]
-            * finance_scenario["sw_revenue_per_customer_per_year"]
-        )
+    # Annual accumulation buckets (one per model year)
+    _SUM_KEYS = [
+        "Engineering Cost", "Business Dev Cost", "Other Costs",
+        "Grant Revenue", "SW Dev Revenue",
+        "Dragonfly Maturation", "Dragonfly COGS", "Dragonfly Revenue",
+        "Eterna Maturation",    "Eterna COGS",    "Eterna Revenue",
+        "Ravenity Maturation",  "Ravenity COGS",  "Ravenity Revenue",
+        "SparV Maturation",     "SparV COGS",     "SparV Revenue",
+        "Total Cost", "Total Revenue", "Capital Needed",
+        "_df_units", "_rv_units", "_sv_units", "_et_missions",
+    ]
+    annual = [{k: 0.0 for k in _SUM_KEYS} | {"_fte": 0} for _ in range(TOTAL_YEARS)]
 
-        dragonfly_maturation = df_scenario["maturation_cost"]  if df_scenario      and year == df_scenario["maturation_year"]      else 0
-        eterna_maturation    = eterna_scenario["maturation_cost"] if eterna_scenario  and year == eterna_scenario["maturation_year"]  else 0
-        ravenity_maturation  = ravenity_scenario["maturation_cost"] if ravenity_scenario and year == ravenity_scenario["maturation_year"] else 0
-        sparv_maturation     = sparv_scenario["maturation_cost"]  if sparv_scenario   and year == sparv_scenario["maturation_year"]   else 0
-        maturation_cost = dragonfly_maturation + eterna_maturation + ravenity_maturation + sparv_maturation
+    monthly_rows = []
+    cum_net      = 0.0
+    cum_capital  = 0.0
+    carryover    = 0.0
 
-        uav_units = uav_revenue = uav_cost = 0
-        if df_scenario:
-            uav_units = dragonfly_units_by_year[year - 1]
-            uav_revenue = uav_units * df_scenario["price"]
-            uav_cost = uav_units * df_scenario["cost"]
+    df_lag = df_scenario["revenue_lag_months"]      if df_scenario      else 0
+    et_lag = eterna_scenario["revenue_lag_months"]   if eterna_scenario  else 0
+    rv_lag = ravenity_scenario["revenue_lag_months"] if ravenity_scenario else 0
+    sv_lag = sparv_scenario["revenue_lag_months"]    if sparv_scenario   else 0
 
-        eterna_revenue = eterna_cost = missions = 0
-        if eterna_scenario and year >= eterna_start_year:
-            year_index = year - eterna_start_year
-            missions = int(max(0, eterna_scenario["missions_per_year"] + eterna_scenario["mission_growth_per_year"] * year_index))
-            eterna_revenue = missions * eterna_scenario["avg_revenue_per_mission"]
-            eterna_cost = eterna_scenario["baseline_cost"] + missions * eterna_scenario["avg_cost_per_mission"]
+    for m in range(1, num_months + 1):
+        yr_idx = min((m - 1) // 12, TOTAL_YEARS - 1)
 
-        computer_units = computer_revenue = computer_cost = 0
-        if ravenity_scenario:
-            computer_units = ravenity_units_by_year[year - 1]
-            computer_revenue = computer_units * ravenity_scenario["price"]
-            computer_cost = computer_units * ravenity_scenario["cost"]
+        cal_off   = (start_month - 1) + (m - 1)
+        cal_year  = start_year + cal_off // 12
+        cal_month = cal_off % 12 + 1
+        month_label = f"{_cal.month_abbr[cal_month]} {cal_year}"
 
-        sparv_units = sparv_revenue = sparv_cost = 0
-        if sparv_scenario:
-            sparv_units = sparv_units_by_year[year - 1]
-            sparv_revenue = sparv_units * sparv_scenario["price"]
-            sparv_cost = sparv_units * sparv_scenario["cost"]
+        # Overhead — annual totals spread evenly across 12 months
+        fte   = finance_scenario["fte_count_by_year"][yr_idx]
+        eng   = fte * finance_scenario["fte_cost_per"] / 12
+        biz   = finance_scenario["business_dev_cost_year"][yr_idx] / 12
+        other = finance_scenario["other_cost_by_year"][yr_idx] / 12
+        grant = finance_scenario["grant_revenue"] / 12
+        sw_r  = (finance_scenario["sw_development_customers"][yr_idx]
+                 * finance_scenario["sw_revenue_per_customer_per_year"] / 12)
 
-        total_revenue = grant_revenue + uav_revenue + eterna_revenue + sw_development_revenue + computer_revenue + sparv_revenue
-        total_cost = fte_cost + business_dev_cost + other_cost + uav_cost + eterna_cost + maturation_cost + computer_cost + sparv_cost
-        net_cashflow = total_revenue - total_cost
+        # Maturation costs
+        df_mat = _mat(df_scenario, m)
+        et_mat = _mat(eterna_scenario, m)
+        rv_mat = _mat(ravenity_scenario, m)
+        sv_mat = _mat(sparv_scenario, m)
 
-        cum_cashflow += net_cashflow
-        cum_cost += total_cost
-        cum_revenue += total_revenue
+        # COGS units/missions produced this month
+        df_u  = _product_units(df_scenario, m)
+        rv_u  = _product_units(ravenity_scenario, m)
+        sv_u  = _product_units(sparv_scenario, m)
+        et_ms = _missions(eterna_scenario, m)
 
-        if payback_year is None and cum_cashflow > 0:
-            payback_year = year
+        df_cogs = df_u * df_scenario["cost"]                        if df_scenario      else 0.0
+        rv_cogs = rv_u * ravenity_scenario["cost"]                  if ravenity_scenario else 0.0
+        sv_cogs = sv_u * sparv_scenario["cost"]                     if sparv_scenario   else 0.0
+        et_base = (eterna_scenario["baseline_cost"] / 12
+                   if eterna_scenario and m >= eterna_scenario["cogs_start_month"] else 0.0)
+        et_cogs = (et_ms * eterna_scenario["avg_cost_per_mission"] + et_base) if eterna_scenario else 0.0
 
-        rows.append({
-            "Engineers": fte_count,
-            "Engineering Cost": fte_cost / 1e6,
-            "Business Dev Cost": business_dev_cost / 1e6,
-            "Other Costs": other_cost / 1e6,
-            "Grant Revenue": grant_revenue / 1e6,
-            "SW Dev Revenue": sw_development_revenue / 1e6,
-            "Dragonfly Maturation": dragonfly_maturation / 1e6,
-            "Dragonfly Units": uav_units,
-            "Dragonfly Cost": uav_cost / 1e6,
-            "Dragonfly Revenue": uav_revenue / 1e6,
-            "Eterna Maturation": eterna_maturation / 1e6,
-            "Eterna Missions": missions,
-            "Eterna Cost": eterna_cost / 1e6,
-            "Eterna Revenue": eterna_revenue / 1e6,
-            "Ravenity Maturation": ravenity_maturation / 1e6,
-            "Ravenity Units": computer_units,
-            "Ravenity Cost": computer_cost / 1e6,
-            "Ravenity Revenue": computer_revenue / 1e6,
-            "SparV Maturation": sparv_maturation / 1e6,
-            "SparV Units": sparv_units,
-            "SparV Cost": sparv_cost / 1e6,
-            "SparV Revenue": sparv_revenue / 1e6,
-            "Total Cost": total_cost / 1e6,
-            "Total Revenue": total_revenue / 1e6,
-            "Oper Profit/Loss": net_cashflow / 1e6,
-            "Cumulative Cost": cum_cost / 1e6,
-            "Cumulative Revenue": cum_revenue / 1e6,
-            "Cumulative Oper P/L": cum_cashflow / 1e6,
+        # Revenue — booked revenue_lag_months after the corresponding COGS month
+        df_rev = _product_units(df_scenario,      m - df_lag) * df_scenario["price"]                     if df_scenario      else 0.0
+        rv_rev = _product_units(ravenity_scenario, m - rv_lag) * ravenity_scenario["price"]               if ravenity_scenario else 0.0
+        sv_rev = _product_units(sparv_scenario,    m - sv_lag) * sparv_scenario["price"]                  if sparv_scenario   else 0.0
+        et_rev = _missions(eterna_scenario,        m - et_lag) * eterna_scenario["avg_revenue_per_mission"] if eterna_scenario  else 0.0
+
+        total_cost = eng + biz + other + df_mat + et_mat + rv_mat + sv_mat + df_cogs + rv_cogs + sv_cogs + et_cogs
+        total_rev  = grant + sw_r + df_rev + rv_rev + sv_rev + et_rev
+        net = total_rev - total_cost
+        cum_net += net
+
+        shortfall = total_cost - total_rev
+        inv = max(0.0, shortfall - carryover)
+        cum_capital += inv
+        carryover = max(0.0, carryover + inv - shortfall)
+
+        # Accumulate into annual bucket
+        a = annual[yr_idx]
+        a["Engineering Cost"]     += eng
+        a["Business Dev Cost"]    += biz
+        a["Other Costs"]          += other
+        a["Grant Revenue"]        += grant
+        a["SW Dev Revenue"]       += sw_r
+        a["Dragonfly Maturation"] += df_mat
+        a["Dragonfly COGS"]       += df_cogs
+        a["Dragonfly Revenue"]    += df_rev
+        a["Eterna Maturation"]    += et_mat
+        a["Eterna COGS"]          += et_cogs
+        a["Eterna Revenue"]       += et_rev
+        a["Ravenity Maturation"]  += rv_mat
+        a["Ravenity COGS"]        += rv_cogs
+        a["Ravenity Revenue"]     += rv_rev
+        a["SparV Maturation"]     += sv_mat
+        a["SparV COGS"]           += sv_cogs
+        a["SparV Revenue"]        += sv_rev
+        a["Total Cost"]           += total_cost
+        a["Total Revenue"]        += total_rev
+        a["Capital Needed"]       += inv
+        a["_df_units"]            += df_u
+        a["_rv_units"]            += rv_u
+        a["_sv_units"]            += sv_u
+        a["_et_missions"]         += et_ms
+        a["_fte"]                  = fte
+
+        monthly_rows.append({
+            "Month":               month_label,
+            "Engineering Cost":    eng,
+            "Business Dev Cost":   biz,
+            "Other Costs":         other,
+            "Grant Revenue":       grant,
+            "SW Dev Revenue":      sw_r,
+            "Dragonfly Maturation": df_mat,
+            "Dragonfly COGS":      df_cogs,
+            "Dragonfly Revenue":   df_rev,
+            "Eterna Maturation":   et_mat,
+            "Eterna COGS":         et_cogs,
+            "Eterna Revenue":      et_rev,
+            "Ravenity Maturation": rv_mat,
+            "Ravenity COGS":       rv_cogs,
+            "Ravenity Revenue":    rv_rev,
+            "SparV Maturation":    sv_mat,
+            "SparV COGS":          sv_cogs,
+            "SparV Revenue":       sv_rev,
+            "Total Cost":          total_cost,
+            "Total Revenue":       total_rev,
+            "Net":                 net,
+            "Cumulative Net":      cum_net,
+            "Capital Needed":      inv,
+            "Cumulative Capital":  cum_capital,
         })
 
-    df = pd.DataFrame(rows, index=["Year %d" % i for i in range(1, TOTAL_YEARS + 1)]).T
+    # ── Build annual DataFrame from monthly rollup ─────────────────────────────────
+    df_rows = []
+    cum_cost_a = cum_rev_a = cum_pl_a = cum_cap_a = 0.0
+    payback_year = None
 
-    overhead_costs = (df.loc["Engineering Cost"] + df.loc["Business Dev Cost"]
-                      + df.loc["Other Costs"]
-                      + df.loc["Dragonfly Maturation"] + df.loc["Eterna Maturation"]
-                      + df.loc["Ravenity Maturation"] + df.loc["SparV Maturation"])
-    product_cogs = (df.loc["Dragonfly Cost"] + df.loc["Eterna Cost"]
-                    + df.loc["Ravenity Cost"] + df.loc["SparV Cost"])
-    available_revenue = df.loc["Total Revenue"] - product_cogs
+    for yr_idx, a in enumerate(annual):
+        net_pl = a["Total Revenue"] - a["Total Cost"]
+        cum_cost_a += a["Total Cost"]
+        cum_rev_a  += a["Total Revenue"]
+        cum_pl_a   += net_pl
+        cum_cap_a  += a["Capital Needed"]
+        if payback_year is None and cum_pl_a > 0:
+            payback_year = yr_idx + 1
 
-    carryover = 0.0
-    yearly_investment = []
-    for col in df.columns:
-        oh = overhead_costs[col]
-        av = available_revenue[col]
-        inv_y = max(0.0, oh - carryover)
-        yearly_investment.append(inv_y)
-        carryover = max(0.0, carryover + inv_y - oh + av)
-    df.loc["Capital Needed"] = yearly_investment
+        df_rows.append({
+            "Engineers":            int(a["_fte"]),
+            "Engineering Cost":     a["Engineering Cost"]     / 1e6,
+            "Business Dev Cost":    a["Business Dev Cost"]    / 1e6,
+            "Other Costs":          a["Other Costs"]          / 1e6,
+            "Grant Revenue":        a["Grant Revenue"]        / 1e6,
+            "SW Dev Revenue":       a["SW Dev Revenue"]       / 1e6,
+            "Dragonfly Maturation": a["Dragonfly Maturation"] / 1e6,
+            "Dragonfly Units":      a["_df_units"],
+            "Dragonfly Cost":       a["Dragonfly COGS"]       / 1e6,
+            "Dragonfly Revenue":    a["Dragonfly Revenue"]    / 1e6,
+            "Eterna Maturation":    a["Eterna Maturation"]    / 1e6,
+            "Eterna Missions":      a["_et_missions"],
+            "Eterna Cost":          a["Eterna COGS"]          / 1e6,
+            "Eterna Revenue":       a["Eterna Revenue"]       / 1e6,
+            "Ravenity Maturation":  a["Ravenity Maturation"]  / 1e6,
+            "Ravenity Units":       a["_rv_units"],
+            "Ravenity Cost":        a["Ravenity COGS"]        / 1e6,
+            "Ravenity Revenue":     a["Ravenity Revenue"]     / 1e6,
+            "SparV Maturation":     a["SparV Maturation"]     / 1e6,
+            "SparV Units":          a["_sv_units"],
+            "SparV Cost":           a["SparV COGS"]           / 1e6,
+            "SparV Revenue":        a["SparV Revenue"]        / 1e6,
+            "Total Cost":           a["Total Cost"]           / 1e6,
+            "Total Revenue":        a["Total Revenue"]        / 1e6,
+            "Oper Profit/Loss":     net_pl                    / 1e6,
+            "Cumulative Cost":      cum_cost_a                / 1e6,
+            "Cumulative Revenue":   cum_rev_a                 / 1e6,
+            "Cumulative Oper P/L":  cum_pl_a                  / 1e6,
+            "Capital Needed":       a["Capital Needed"]       / 1e6,
+            "Cumulative Capital":   cum_cap_a                 / 1e6,
+        })
 
-    cumulative_capital = []
-    running = 0.0
-    for inv in yearly_investment:
-        running += inv
-        cumulative_capital.append(running)
-    df.loc["Cumulative Capital"] = cumulative_capital
+    df_result = pd.DataFrame(df_rows, index=[f"Year {i}" for i in range(1, TOTAL_YEARS + 1)]).T
 
-    total_investment = sum(yearly_investment)
-    total_return = df.loc["Cumulative Oper P/L"].iloc[-1]
-    roi = (total_return / total_investment) if total_investment else 0.0
-    moic = ((total_return + total_investment) / total_investment) if total_investment else 0.0
+    total_investment = cum_cap_a / 1e6
+    total_return     = cum_pl_a  / 1e6
+    roi  = total_return / total_investment if total_investment else 0.0
+    moic = (total_return + total_investment) / total_investment if total_investment else 0.0
 
-    return df, total_investment, total_return, roi, moic, payback_year
+    return df_result, monthly_rows, total_investment, total_return, roi, moic, payback_year
 
 
-# === LOAD SCENARIOS FROM GOOGLE SHEETS ===
+# ── Load scenarios from Google Sheets ────────────────────────────────────────────
 
 print("Reading scenarios from Google Sheets...")
 sh = open_spreadsheet()
@@ -187,19 +245,21 @@ ravenity_scenarios       = read_ravenity_scenarios(sh)
 sparv_scenarios          = read_sparv_scenarios(sh)
 financial_scenarios      = read_finance_scenarios(sh)
 scenario_combinations    = read_scenario_combinations(sh)
+monthly_timing           = read_monthly_timing(sh)
 
 print(f"Loaded {len(scenario_combinations)} combination(s) to run.\n")
 
-# === RUN SELECTED COMBINATIONS ===
+# ── Run all combinations ─────────────────────────────────────────────────────────
 
-results_for_sheet = []
+results_for_output       = []
+results_for_monthly_plan = []
 
 for combo in scenario_combinations:
-    df_scenario      = next((d for d in dragonfly_scenarios      if combo["dragonfly"] and d["label"] == combo["dragonfly"]), None)
-    eterna_scenario  = next((e for e in eterna_service_scenarios if combo["eterna"]    and e["label"] == combo["eterna"]),    None)
-    ravenity_scenario = next((r for r in ravenity_scenarios      if combo["ravenity"]  and r["label"] == combo["ravenity"]),  None)
-    sparv_scenario   = next((s for s in sparv_scenarios          if combo.get("sparv") and s["label"] == combo["sparv"]),     None)
-    finance_scenario = next(f for f in financial_scenarios if f["label"] == combo["finance"])
+    df_scenario       = next((d for d in dragonfly_scenarios      if combo["dragonfly"] and d["label"] == combo["dragonfly"]), None)
+    eterna_scenario   = next((e for e in eterna_service_scenarios if combo["eterna"]    and e["label"] == combo["eterna"]),    None)
+    ravenity_scenario = next((r for r in ravenity_scenarios       if combo["ravenity"]  and r["label"] == combo["ravenity"]),  None)
+    sparv_scenario    = next((s for s in sparv_scenarios          if combo.get("sparv") and s["label"] == combo["sparv"]),     None)
+    finance_scenario  = next(f for f in financial_scenarios if f["label"] == combo["finance"])
 
     label = finance_scenario["label"]
     if df_scenario:       label += " + %s" % df_scenario["label"]
@@ -207,75 +267,79 @@ for combo in scenario_combinations:
     if ravenity_scenario: label += " + %s" % ravenity_scenario["label"]
     if sparv_scenario:    label += " + %s" % sparv_scenario["label"]
 
-    df_result, investment, total_return, roi, moic, payback_year = run_simulation(
-        df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, finance_scenario
+    df_result, monthly_rows, investment, total_return, roi, moic, payback_year = run_model(
+        df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario,
+        finance_scenario, monthly_timing,
     )
 
-    results_for_sheet.append((label, df_result, investment, total_return, roi, moic, payback_year))
+    results_for_output.append((label, df_result, investment, total_return, roi, moic, payback_year))
+    results_for_monthly_plan.append((label, monthly_rows))
 
-    print("\n--- Financial Summary Table (%s) ---" % label)
+    # ── Terminal printout ──────────────────────────────────────────────────────────
+    print("\n--- Scenario: %s ---" % label)
     if df_scenario:
-        print("Dragonfly Price per Unit: $%s" % format(df_scenario["price"], ","))
-        print("Dragonfly Cost per Unit:  $%s" % format(df_scenario["cost"], ","))
-        print("Initial Dragonfly Units Sold (Year %s): %d" % (df_scenario["maturation_year"] + 1, df_scenario["initial_units"]))
-        print("Dragonfly Sales Growth Rate: %d%%" % int((df_scenario["growth"] - 1) * 100))
+        print("  Dragonfly price/unit: $%s  cost/unit: $%s  initial_units/yr: %d  growth: %d%%"
+              % (format(df_scenario["price"], ","), format(df_scenario["cost"], ","),
+                 df_scenario["initial_units"], int((df_scenario["growth"] - 1) * 100)))
+        print("  Dragonfly maturation: month %d, %d-month spread  |  COGS start: month %d  |  rev lag: %d mo"
+              % (df_scenario["maturation_start_month"], df_scenario["maturation_duration_months"],
+                 df_scenario["cogs_start_month"], df_scenario["revenue_lag_months"]))
     if eterna_scenario:
-        es = eterna_scenario
-        print("Eterna Start Year: Year %d" % eterna_scenario["first_sales_year"])
-        print("Eterna Missions (Y%d): %d, +%d/yr" % (eterna_scenario["first_sales_year"], es["missions_per_year"], es["mission_growth_per_year"]))
-        print("Eterna $/Mission: rev $%s, cost $%s (baseline $%s/yr)" % (
-            format(es["avg_revenue_per_mission"], ","),
-            format(es["avg_cost_per_mission"], ","),
-            format(es["baseline_cost"], ","),
-        ))
+        print("  Eterna missions/yr: %d + %d/yr growth  |  rev/mission: $%s  cost/mission: $%s"
+              % (eterna_scenario["missions_per_year"], eterna_scenario["mission_growth_per_year"],
+                 format(eterna_scenario["avg_revenue_per_mission"], ","),
+                 format(eterna_scenario["avg_cost_per_mission"], ",")))
+        print("  Eterna maturation: month %d, %d-month spread  |  COGS start: month %d  |  rev lag: %d mo"
+              % (eterna_scenario["maturation_start_month"], eterna_scenario["maturation_duration_months"],
+                 eterna_scenario["cogs_start_month"], eterna_scenario["revenue_lag_months"]))
     if ravenity_scenario:
-        print("Ravenity Price per Unit: $%s" % format(ravenity_scenario["price"], ","))
-        print("Ravenity Cost per Unit:  $%s" % format(ravenity_scenario["cost"], ","))
-        print("Initial Ravenity Units Sold (Year %s): %d" % (ravenity_scenario["maturation_year"] + 1, ravenity_scenario["initial_units"]))
-        print("Ravenity Sales Growth Rate: %d%%" % int((ravenity_scenario["growth"] - 1) * 100))
+        print("  Ravenity price/unit: $%s  cost/unit: $%s  initial_units/yr: %d  growth: %d%%"
+              % (format(ravenity_scenario["price"], ","), format(ravenity_scenario["cost"], ","),
+                 ravenity_scenario["initial_units"], int((ravenity_scenario["growth"] - 1) * 100)))
+        print("  Ravenity maturation: month %d, %d-month spread  |  COGS start: month %d  |  rev lag: %d mo"
+              % (ravenity_scenario["maturation_start_month"], ravenity_scenario["maturation_duration_months"],
+                 ravenity_scenario["cogs_start_month"], ravenity_scenario["revenue_lag_months"]))
     if sparv_scenario:
-        print("SparV Price per Unit:    $%s" % format(sparv_scenario["price"], ","))
-        print("SparV Cost per Unit:     $%s" % format(sparv_scenario["cost"], ","))
-        print("Initial SparV Units Sold (Year %d): %d" % (sparv_scenario["first_sales_year"], sparv_scenario["initial_units"]))
-        print("SparV Sales Growth Rate: %d%%" % int((sparv_scenario["growth"] - 1) * 100))
+        print("  SparV price/unit: $%s  cost/unit: $%s  initial_units/yr: %d  growth: %d%%"
+              % (format(sparv_scenario["price"], ","), format(sparv_scenario["cost"], ","),
+                 sparv_scenario["initial_units"], int((sparv_scenario["growth"] - 1) * 100)))
+        print("  SparV maturation: month %d, %d-month spread  |  COGS start: month %d  |  rev lag: %d mo"
+              % (sparv_scenario["maturation_start_month"], sparv_scenario["maturation_duration_months"],
+                 sparv_scenario["cogs_start_month"], sparv_scenario["revenue_lag_months"]))
 
-    print("\n--- Investor Summary Table (%s) ---" % label)
-    print("Total Investment:   $%s" % format(investment * 1e6, ",.0f"))
-    print("Total Return:       $%s" % format(total_return * 1e6, ",.0f"))
-    print("ROI: %.2fx" % roi)
-    print("MOIC: %.2fx" % moic)
+    print("\n  Total Investment:  $%s" % format(investment * 1e6, ",.0f"))
+    print("  Total Return:      $%s" % format(total_return * 1e6, ",.0f"))
+    print("  ROI: %.2fx  MOIC: %.2fx" % (roi, moic))
     if payback_year:
-        print("Payback Period: Year %d\n" % payback_year)
+        print("  Payback Period: Year %d" % payback_year)
     else:
-        print("Payback Period: Not achieved in %d years\n" % TOTAL_YEARS)
+        print("  Payback Period: Not achieved in %d years" % TOTAL_YEARS)
 
+    print()
     with pd.option_context("display.float_format", "{:,.2f}".format):
-        header = "%-19s" % "Phase"
+        header = "%-22s" % "Metric"
         for col in df_result.columns:
-            header += "%7s " % col
+            header += "%8s " % col
         print(header)
         for row in df_result.index:
-            line = "%-19s" % row
+            line = "%-22s" % row
             for col in df_result.columns:
+                val = df_result.loc[row, col]
                 if row in ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units"):
-                    line += "%7d " % int(df_result.loc[row, col])
+                    line += "%8d " % int(val)
                 else:
-                    line += "%7.2f " % df_result.loc[row, col]
+                    line += "%8.2f " % val
             print(line)
 
     fig, ax = plt.subplots(figsize=(14, 8))
     plt.rcParams.update({"font.size": 16})
-
     df_result.T["Total Cost"].plot(kind="line", linewidth=2, ax=ax, grid=True, color="darkorange", label="Total Cost")
     df_result.T["Total Revenue"].plot(kind="line", linewidth=2, ax=ax, grid=True, color="darkblue", label="Total Revenue")
     df_result.T["Cumulative Oper P/L"].plot(kind="bar", ax=ax, alpha=0.3, color="gray", label="Cumulative Operating Profit/Loss")
-
     for idx, val in enumerate(df_result.T["Cumulative Oper P/L"]):
-        if val >= 0:
-            ax.text(idx, val - 0.3, f"{val:.2f}", ha="center", va="top", fontsize=13, color="black")
-        else:
-            ax.text(idx, val + 0.3, f"{val:.2f}", ha="center", va="bottom", fontsize=13, color="black")
-
+        offset = -0.3 if val >= 0 else 0.3
+        va     = "top"  if val >= 0 else "bottom"
+        ax.text(idx, val + offset, f"{val:.2f}", ha="center", va=va, fontsize=13, color="black")
     ax.set_title(label + "\n", fontsize=12)
     ax.set_xlabel("Phase (Year)", fontsize=16)
     ax.set_ylabel("Millions $", fontsize=16)
@@ -284,87 +348,17 @@ for combo in scenario_combinations:
     ax.tick_params(axis="y", labelsize=16)
     ax.legend(fontsize=16)
     ax.axhline(0, color="gray", alpha=0.3, linewidth=1)
-
     # plt.show(block=False)
     # plt.pause(0.5)
 
-# === WRITE ANNUAL RESULTS TO GOOGLE SHEETS ===
+# ── Write results to Google Sheets ───────────────────────────────────────────────
 
-print("\nWriting results to Output tab...")
-write_output(sh, results_for_sheet)
-print("Output written to Google Sheet.")
-
-# === GENERATE MONTHLY SPENDING PLAN ===
-
-print("\nReading monthly timing settings...")
-monthly_timing = read_monthly_timing(sh)
-
-def generate_monthly_plan(df_result, timing):
-    start_year  = timing["start_year"]
-    start_month = timing["start_month"]
-    num_months  = timing["num_months"]
-    weights     = timing["weights"]
-
-    def get_weights(cat):
-        return weights.get(cat, [1 / 12] * 12)
-
-    monthly_rows = []
-    cum_net = 0.0
-    cum_investment = 0.0
-    carryover = 0.0
-
-    for m_idx in range(num_months):
-        total_month   = (start_month - 1) + m_idx
-        cal_year      = start_year + total_month // 12
-        cal_month     = total_month % 12 + 1
-        month_label   = f"{_cal.month_abbr[cal_month]} {cal_year}"
-        model_year  = m_idx // 12 + 1
-        weight_idx  = m_idx if m_idx < 24 else 12 + (m_idx % 12)  # years 3+ repeat yr-2 pattern
-
-        if model_year > TOTAL_YEARS:
-            break
-
-        year_col = f"Year {model_year}"
-        row = {"Month": month_label}
-
-        for weight_cat, df_row in WEIGHT_TO_ROW.items():
-            annual_val = df_result.loc[df_row, year_col] * 1e6
-            row[weight_cat] = annual_val * get_weights(weight_cat)[weight_idx]
-
-        total_cost    = (row["Engineering Cost"] + row["Business Dev"] + row["Other Costs"] +
-                         row["Dragonfly Maturation"] + row["Dragonfly COGS"] +
-                         row["Eterna Maturation"]    + row["Eterna COGS"] +
-                         row["Ravenity Maturation"]  + row["Ravenity COGS"] +
-                         row["SparV Maturation"]     + row["SparV COGS"])
-        total_revenue = (row["Grant Revenue"] + row["SW Dev Revenue"] +
-                         row["Dragonfly Revenue"] + row["Eterna Revenue"] +
-                         row["Ravenity Revenue"] + row["SparV Revenue"])
-        net = total_revenue - total_cost
-        cum_net += net
-
-        shortfall = total_cost - total_revenue  # positive = cash outflow
-        inv = max(0.0, shortfall - carryover)
-        cum_investment += inv
-        carryover = max(0.0, carryover + inv - shortfall)
-
-        row["Total Cost"]        = total_cost
-        row["Total Revenue"]     = total_revenue
-        row["Net"]               = net
-        row["Cumulative Net"]         = cum_net
-        row["Capital Needed"] = inv
-        row["Cumulative Capital"]  = cum_investment
-        monthly_rows.append(row)
-
-    return monthly_rows
-
-
-monthly_plan_results = [
-    (label, generate_monthly_plan(df_result, monthly_timing))
-    for (label, df_result, *_) in results_for_sheet
-]
+print("\nWriting annual results to Output tab...")
+write_output(sh, results_for_output)
+print("Output tab written.")
 
 print("Writing monthly plan to Monthly Plan tab...")
-write_monthly_plan(sh, monthly_plan_results)
-print("Monthly plan written to Google Sheet.")
+write_monthly_plan(sh, results_for_monthly_plan)
+print("Monthly Plan tab written.")
 
 # plt.show()
