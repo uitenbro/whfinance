@@ -116,7 +116,7 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
 
         rows.append({
             "Engineers": fte_count,
-            "Total Engr Cost": fte_cost / 1e6,
+            "Engineering Cost": fte_cost / 1e6,
             "Business Dev Cost": business_dev_cost / 1e6,
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
@@ -144,7 +144,7 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
 
     df = pd.DataFrame(rows, index=["Year %d" % i for i in range(1, TOTAL_YEARS + 1)]).T
 
-    overhead_costs = (df.loc["Total Engr Cost"] + df.loc["Business Dev Cost"]
+    overhead_costs = (df.loc["Engineering Cost"] + df.loc["Business Dev Cost"]
                       + df.loc["Other Costs"] + df.loc["Maturation Cost"])
     product_cogs = (df.loc["Dragonfly Cost"] + df.loc["Eterna Cost"]
                     + df.loc["Ravenity Cost"] + df.loc["SparV Cost"])
@@ -329,7 +329,7 @@ def generate_monthly_plan(df_result, timing):
             annual_val = df_result.loc[df_row, year_col] * 1e6
             row[weight_cat] = annual_val * get_weights(weight_cat)[weight_idx]
 
-        total_cost    = (row["FTE Cost"] + row["Business Dev"] + row["Other Costs"] +
+        total_cost    = (row["Engineering Cost"] + row["Business Dev"] + row["Other Costs"] +
                          row["Maturation Cost"] + row["Dragonfly COGS"] + row["Eterna COGS"] +
                          row["Ravenity COGS"] + row["SparV COGS"])
         total_revenue = (row["Grant Revenue"] + row["SW Dev Revenue"] +
@@ -338,7 +338,7 @@ def generate_monthly_plan(df_result, timing):
         net = total_revenue - total_cost
         cum_net += net
 
-        overhead      = row["FTE Cost"] + row["Business Dev"] + row["Other Costs"] + row["Maturation Cost"]
+        overhead      = row["Engineering Cost"] + row["Business Dev"] + row["Other Costs"] + row["Maturation Cost"]
         product_cogs  = row["Dragonfly COGS"] + row["Eterna COGS"] + row["Ravenity COGS"] + row["SparV COGS"]
         available_rev = total_revenue - product_cogs
 

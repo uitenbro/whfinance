@@ -24,7 +24,7 @@ INTEGER_ROWS = ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV U
 
 # Maps Monthly Timing category names → df_result row names
 WEIGHT_TO_ROW = {
-    "FTE Cost":          "Total Engr Cost",
+    "Engineering Cost":  "Engineering Cost",
     "Business Dev":      "Business Dev Cost",
     "Other Costs":       "Other Costs",
     "Maturation Cost":   "Maturation Cost",
@@ -41,7 +41,7 @@ WEIGHT_TO_ROW = {
 }
 
 MONTHLY_LINE_ITEMS = [
-    "FTE Cost", "Business Dev", "Other Costs", "Maturation Cost",
+    "Engineering Cost", "Business Dev", "Other Costs", "Maturation Cost",
     "Dragonfly COGS", "Dragonfly Revenue",
     "Eterna COGS",    "Eterna Revenue",
     "Ravenity COGS",  "Ravenity Revenue",
