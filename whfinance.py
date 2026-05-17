@@ -172,8 +172,8 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
             "SparV Revenue":       sv_rev,
             "Total Cost":          total_cost,
             "Total Revenue":       total_rev,
-            "Net":                 net,
-            "Cumulative Net":      cum_net,
+            "Oper Profit/Loss":    net,
+            "Cumulative Oper P/L": cum_net,
             "Capital Needed":      inv,
             "Cumulative Capital":  cum_capital,
         })

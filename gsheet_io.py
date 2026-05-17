@@ -29,8 +29,8 @@ MONTHLY_LINE_ITEMS = [
     "Ravenity Maturation",  "Ravenity COGS",  "Ravenity Revenue",
     "SparV Maturation",     "SparV COGS",     "SparV Revenue",
     "Grant Revenue", "SW Dev Revenue",
-    "Total Cost", "Total Revenue", "Net",
-    "Cumulative Net", "Capital Needed", "Cumulative Capital",
+    "Total Cost", "Total Revenue", "Oper Profit/Loss",
+    "Cumulative Oper P/L", "Capital Needed", "Cumulative Capital",
 ]
 
 
