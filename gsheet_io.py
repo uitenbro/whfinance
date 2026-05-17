@@ -48,7 +48,7 @@ MONTHLY_LINE_ITEMS = [
     "SparV COGS",     "SparV Revenue",
     "Grant Revenue",  "SW Dev Revenue",
     "Total Cost", "Total Revenue", "Net",
-    "Cumul Net", "Capital Needed", "Cumulative Capital",
+    "Cumulative Net", "Capital Needed", "Cumulative Capital",
 ]
 
 

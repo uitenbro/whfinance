@@ -137,9 +137,9 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
             "Total Cost": total_cost / 1e6,
             "Total Revenue": total_revenue / 1e6,
             "Oper Profit/Loss": net_cashflow / 1e6,
-            "Cumul Cost": cum_cost / 1e6,
-            "Cumul Revenue": cum_revenue / 1e6,
-            "Cumul Oper P/L": cum_cashflow / 1e6,
+            "Cumulative Cost": cum_cost / 1e6,
+            "Cumulative Revenue": cum_revenue / 1e6,
+            "Cumulative Oper P/L": cum_cashflow / 1e6,
         })
 
     df = pd.DataFrame(rows, index=["Year %d" % i for i in range(1, TOTAL_YEARS + 1)]).T
@@ -168,7 +168,7 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
     df.loc["Cumulative Capital"] = cumulative_capital
 
     total_investment = sum(yearly_investment)
-    total_return = df.loc["Cumul Oper P/L"].iloc[-1]
+    total_return = df.loc["Cumulative Oper P/L"].iloc[-1]
     roi = (total_return / total_investment) if total_investment else 0.0
     moic = ((total_return + total_investment) / total_investment) if total_investment else 0.0
 
@@ -266,9 +266,9 @@ for combo in scenario_combinations:
 
     df_result.T["Total Cost"].plot(kind="line", linewidth=2, ax=ax, grid=True, color="darkorange", label="Total Cost")
     df_result.T["Total Revenue"].plot(kind="line", linewidth=2, ax=ax, grid=True, color="darkblue", label="Total Revenue")
-    df_result.T["Cumul Oper P/L"].plot(kind="bar", ax=ax, alpha=0.3, color="gray", label="Cumul Operating Profit/Loss")
+    df_result.T["Cumulative Oper P/L"].plot(kind="bar", ax=ax, alpha=0.3, color="gray", label="Cumulative Operating Profit/Loss")
 
-    for idx, val in enumerate(df_result.T["Cumul Oper P/L"]):
+    for idx, val in enumerate(df_result.T["Cumulative Oper P/L"]):
         if val >= 0:
             ax.text(idx, val - 0.3, f"{val:.2f}", ha="center", va="top", fontsize=13, color="black")
         else:
@@ -349,7 +349,7 @@ def generate_monthly_plan(df_result, timing):
         row["Total Cost"]        = total_cost
         row["Total Revenue"]     = total_revenue
         row["Net"]               = net
-        row["Cumul Net"]         = cum_net
+        row["Cumulative Net"]         = cum_net
         row["Capital Needed"] = inv
         row["Cumulative Capital"]  = cum_investment
         monthly_rows.append(row)
