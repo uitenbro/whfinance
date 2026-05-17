@@ -1,4 +1,5 @@
 import calendar as _cal
+from operator import lt
 import pandas as pd
 import matplotlib.pyplot as plt
 from gsheet_io import (
@@ -283,8 +284,8 @@ for combo in scenario_combinations:
     ax.legend(fontsize=16)
     ax.axhline(0, color="gray", alpha=0.3, linewidth=1)
 
-    plt.show(block=False)
-    plt.pause(0.5)
+    # plt.show(block=False)
+    # plt.pause(0.5)
 
 # === WRITE ANNUAL RESULTS TO GOOGLE SHEETS ===
 
@@ -338,13 +339,10 @@ def generate_monthly_plan(df_result, timing):
         net = total_revenue - total_cost
         cum_net += net
 
-        overhead      = row["Engineering Cost"] + row["Business Dev"] + row["Other Costs"] + row["Maturation Cost"]
-        product_cogs  = row["Dragonfly COGS"] + row["Eterna COGS"] + row["Ravenity COGS"] + row["SparV COGS"]
-        available_rev = total_revenue - product_cogs
-
-        inv = max(0.0, overhead - carryover)
+        shortfall = total_cost - total_revenue  # positive = cash outflow
+        inv = max(0.0, shortfall - carryover)
         cum_investment += inv
-        carryover = max(0.0, carryover + inv - overhead + available_rev)
+        carryover = max(0.0, carryover + inv - shortfall)
 
         row["Total Cost"]        = total_cost
         row["Total Revenue"]     = total_revenue
@@ -366,4 +364,4 @@ print("Writing monthly plan to Monthly Plan tab...")
 write_monthly_plan(sh, monthly_plan_results)
 print("Monthly plan written to Google Sheet.")
 
-plt.show()
+# plt.show()
