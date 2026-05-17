@@ -177,8 +177,9 @@ def _populate_monthly_timing(ws):
     ]
     mo_headers = [f"Mo {i}" for i in range(1, 25)]
     header_row = [["category"] + mo_headers]
+    MATURATION_CATS = {"Dragonfly Maturation", "Eterna Maturation", "Ravenity Maturation", "SparV Maturation"}
     weight_rows = [
-        [cat] + (MATURATION if cat == "Maturation Cost" else EVEN)
+        [cat] + (MATURATION if cat in MATURATION_CATS else EVEN)
         for cat in WEIGHT_TO_ROW
     ]
     ws.update("A1", settings_rows + [[]] + header_row + weight_rows)

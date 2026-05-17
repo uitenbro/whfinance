@@ -69,15 +69,11 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
             * finance_scenario["sw_revenue_per_customer_per_year"]
         )
 
-        maturation_cost = 0
-        if ravenity_scenario and year == ravenity_scenario["maturation_year"]:
-            maturation_cost += ravenity_scenario["maturation_cost"]
-        if df_scenario and year == df_scenario["maturation_year"]:
-            maturation_cost += df_scenario["maturation_cost"]
-        if eterna_scenario and year == eterna_scenario["maturation_year"]:
-            maturation_cost += eterna_scenario["maturation_cost"]
-        if sparv_scenario and year == sparv_scenario["maturation_year"]:
-            maturation_cost += sparv_scenario["maturation_cost"]
+        dragonfly_maturation = df_scenario["maturation_cost"]  if df_scenario      and year == df_scenario["maturation_year"]      else 0
+        eterna_maturation    = eterna_scenario["maturation_cost"] if eterna_scenario  and year == eterna_scenario["maturation_year"]  else 0
+        ravenity_maturation  = ravenity_scenario["maturation_cost"] if ravenity_scenario and year == ravenity_scenario["maturation_year"] else 0
+        sparv_maturation     = sparv_scenario["maturation_cost"]  if sparv_scenario   and year == sparv_scenario["maturation_year"]   else 0
+        maturation_cost = dragonfly_maturation + eterna_maturation + ravenity_maturation + sparv_maturation
 
         uav_units = uav_revenue = uav_cost = 0
         if df_scenario:
@@ -122,19 +118,22 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
             "Other Costs": other_cost / 1e6,
             "Grant Revenue": grant_revenue / 1e6,
             "SW Dev Revenue": sw_development_revenue / 1e6,
+            "Dragonfly Maturation": dragonfly_maturation / 1e6,
             "Dragonfly Units": uav_units,
             "Dragonfly Cost": uav_cost / 1e6,
             "Dragonfly Revenue": uav_revenue / 1e6,
+            "Eterna Maturation": eterna_maturation / 1e6,
             "Eterna Missions": missions,
             "Eterna Cost": eterna_cost / 1e6,
             "Eterna Revenue": eterna_revenue / 1e6,
+            "Ravenity Maturation": ravenity_maturation / 1e6,
             "Ravenity Units": computer_units,
             "Ravenity Cost": computer_cost / 1e6,
             "Ravenity Revenue": computer_revenue / 1e6,
+            "SparV Maturation": sparv_maturation / 1e6,
             "SparV Units": sparv_units,
             "SparV Cost": sparv_cost / 1e6,
             "SparV Revenue": sparv_revenue / 1e6,
-            "Maturation Cost": maturation_cost / 1e6,
             "Total Cost": total_cost / 1e6,
             "Total Revenue": total_revenue / 1e6,
             "Oper Profit/Loss": net_cashflow / 1e6,
@@ -146,7 +145,9 @@ def run_simulation(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenar
     df = pd.DataFrame(rows, index=["Year %d" % i for i in range(1, TOTAL_YEARS + 1)]).T
 
     overhead_costs = (df.loc["Engineering Cost"] + df.loc["Business Dev Cost"]
-                      + df.loc["Other Costs"] + df.loc["Maturation Cost"])
+                      + df.loc["Other Costs"]
+                      + df.loc["Dragonfly Maturation"] + df.loc["Eterna Maturation"]
+                      + df.loc["Ravenity Maturation"] + df.loc["SparV Maturation"])
     product_cogs = (df.loc["Dragonfly Cost"] + df.loc["Eterna Cost"]
                     + df.loc["Ravenity Cost"] + df.loc["SparV Cost"])
     available_revenue = df.loc["Total Revenue"] - product_cogs
@@ -331,8 +332,10 @@ def generate_monthly_plan(df_result, timing):
             row[weight_cat] = annual_val * get_weights(weight_cat)[weight_idx]
 
         total_cost    = (row["Engineering Cost"] + row["Business Dev"] + row["Other Costs"] +
-                         row["Maturation Cost"] + row["Dragonfly COGS"] + row["Eterna COGS"] +
-                         row["Ravenity COGS"] + row["SparV COGS"])
+                         row["Dragonfly Maturation"] + row["Dragonfly COGS"] +
+                         row["Eterna Maturation"]    + row["Eterna COGS"] +
+                         row["Ravenity Maturation"]  + row["Ravenity COGS"] +
+                         row["SparV Maturation"]     + row["SparV COGS"])
         total_revenue = (row["Grant Revenue"] + row["SW Dev Revenue"] +
                          row["Dragonfly Revenue"] + row["Eterna Revenue"] +
                          row["Ravenity Revenue"] + row["SparV Revenue"])
