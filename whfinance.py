@@ -1,4 +1,5 @@
 import calendar as _cal
+import math
 import pandas as pd
 import matplotlib.pyplot as plt
 from gsheet_io import (
@@ -59,7 +60,9 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
         "Total Cost", "Total Revenue", "Capital Needed",
         "_df_units", "_rv_units", "_sv_units", "_et_missions",
     ]
-    annual = [{k: 0.0 for k in _SUM_KEYS} | {"_fte": 0} for _ in range(TOTAL_YEARS)]
+    _WD = 20  # working days per month used to convert daily rate to monthly headcount
+
+    annual = [{k: 0.0 for k in _SUM_KEYS} | {"_fte": 0, "_df_techs": 0, "_rv_techs": 0, "_sv_techs": 0, "_et_techs": 0} for _ in range(TOTAL_YEARS)]
 
     monthly_rows = []
     cum_net      = 0.0
@@ -99,6 +102,16 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
         rv_u  = _product_units(ravenity_scenario, m)
         sv_u  = _product_units(sparv_scenario, m)
         et_ms = _missions(eterna_scenario, m)
+
+        def _techs(units_or_missions, scenario):
+            rate = scenario["production_per_tech_daily"] if scenario else 0.0
+            return math.ceil(units_or_missions / (rate * _WD)) if rate > 0 and units_or_missions > 0 else 0
+
+        df_techs    = _techs(df_u,  df_scenario)
+        rv_techs    = _techs(rv_u,  ravenity_scenario)
+        sv_techs    = _techs(sv_u,  sparv_scenario)
+        et_techs    = _techs(et_ms, eterna_scenario)
+        total_techs = df_techs + rv_techs + sv_techs + et_techs
 
         df_cogs = df_u * df_scenario["cost"]                        if df_scenario      else 0.0
         rv_cogs = rv_u * ravenity_scenario["cost"]                  if ravenity_scenario else 0.0
@@ -150,6 +163,10 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
         a["_sv_units"]            += sv_u
         a["_et_missions"]         += et_ms
         a["_fte"]                  = fte
+        a["_df_techs"]             = max(a["_df_techs"], df_techs)
+        a["_rv_techs"]             = max(a["_rv_techs"], rv_techs)
+        a["_sv_techs"]             = max(a["_sv_techs"], sv_techs)
+        a["_et_techs"]             = max(a["_et_techs"], et_techs)
 
         monthly_rows.append({
             "Month":               month_label,
@@ -170,6 +187,11 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
             "SparV Maturation":    sv_mat,
             "SparV COGS":          sv_cogs,
             "SparV Revenue":       sv_rev,
+            "Dragonfly Techs":     df_techs,
+            "Eterna Techs":        et_techs,
+            "Ravenity Techs":      rv_techs,
+            "SparV Techs":         sv_techs,
+            "Total Techs":         total_techs,
             "Total Cost":          total_cost,
             "Total Revenue":       total_rev,
             "Oper Profit/Loss":    net,
@@ -194,6 +216,11 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
 
         df_rows.append({
             "Engineers":            int(a["_fte"]),
+            "Dragonfly Techs":      int(a["_df_techs"]),
+            "Eterna Techs":         int(a["_et_techs"]),
+            "Ravenity Techs":       int(a["_rv_techs"]),
+            "SparV Techs":          int(a["_sv_techs"]),
+            "Total Techs":          int(a["_df_techs"] + a["_rv_techs"] + a["_sv_techs"] + a["_et_techs"]),
             "Engineering Cost":     a["Engineering Cost"]     / 1e6,
             "Business Dev Cost":    a["Business Dev Cost"]    / 1e6,
             "Other Costs":          a["Other Costs"]          / 1e6,
@@ -325,7 +352,9 @@ for combo in scenario_combinations:
             line = "%-22s" % row
             for col in df_result.columns:
                 val = df_result.loc[row, col]
-                if row in ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units"):
+                if row in ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units",
+                           "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs",
+                           "Engineers"):
                     line += "%8d " % int(val)
                 else:
                     line += "%8.2f " % val

@@ -20,7 +20,8 @@ TAB_OUTPUT          = "Annual Plan"
 TAB_MONTHLY_TIMING  = "Timing"
 TAB_MONTHLY_PLAN    = "Monthly Plan"
 
-INTEGER_ROWS = ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units", "Engineers")
+INTEGER_ROWS = ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units", "Engineers",
+                "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs")
 
 MONTHLY_LINE_ITEMS = [
     "Engineering Cost", "Business Dev Cost", "Other Costs",
@@ -28,6 +29,7 @@ MONTHLY_LINE_ITEMS = [
     "Eterna Maturation",    "Eterna COGS",    "Eterna Revenue",
     "Ravenity Maturation",  "Ravenity COGS",  "Ravenity Revenue",
     "SparV Maturation",     "SparV COGS",     "SparV Revenue",
+    "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs",
     "Grant Revenue", "SW Dev Revenue",
     "Total Cost", "Total Revenue", "Oper Profit/Loss",
     "Cumulative Oper P/L", "Capital Needed", "Cumulative Capital",
@@ -85,6 +87,7 @@ def read_dragonfly_scenarios(sh):
         "cost":                       float(r["cost"]),
         "initial_units":              _int(r["initial_units"]),
         "growth":                     float(r["growth"]),
+        "production_per_tech_daily":  float(r.get("production_per_tech_daily") or 0),
         "maturation_cost":            float(r["maturation_cost"]),
         "maturation_start_month":     _int(r["maturation_start_month"]),
         "maturation_duration_months": _int(r["maturation_duration_months"]),
@@ -101,6 +104,7 @@ def read_eterna_scenarios(sh):
         "avg_revenue_per_mission":    float(r["avg_revenue_per_mission"]),
         "avg_cost_per_mission":       float(r["avg_cost_per_mission"]),
         "baseline_cost":              float(r["baseline_cost"]),
+        "production_per_tech_daily":  float(r.get("production_per_tech_daily") or 0),
         "maturation_cost":            float(r["maturation_cost"]),
         "maturation_start_month":     _int(r["maturation_start_month"]),
         "maturation_duration_months": _int(r["maturation_duration_months"]),
@@ -116,6 +120,7 @@ def read_ravenity_scenarios(sh):
         "cost":                       float(r["cost"]),
         "initial_units":              _int(r["initial_units"]),
         "growth":                     float(r["growth"]),
+        "production_per_tech_daily":  float(r.get("production_per_tech_daily") or 0),
         "maturation_cost":            float(r["maturation_cost"]),
         "maturation_start_month":     _int(r["maturation_start_month"]),
         "maturation_duration_months": _int(r["maturation_duration_months"]),
@@ -131,6 +136,7 @@ def read_sparv_scenarios(sh):
         "cost":                       float(r["cost"]),
         "initial_units":              _int(r["initial_units"]),
         "growth":                     float(r["growth"]),
+        "production_per_tech_daily":  float(r.get("production_per_tech_daily") or 0),
         "maturation_cost":            float(r["maturation_cost"]),
         "maturation_start_month":     _int(r["maturation_start_month"]),
         "maturation_duration_months": _int(r["maturation_duration_months"]),
