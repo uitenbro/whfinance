@@ -16,23 +16,39 @@ TAB_RAVENITY     = "Ravenity Scenarios"
 TAB_SPARV        = "SparV Scenarios"
 TAB_FINANCE      = "Finance Scenarios"
 TAB_COMBINATIONS    = "Scenario Combinations"
-TAB_OUTPUT          = "Annual Plan"
+TAB_OUTPUT          = "Annual Cash Flow"
 TAB_MONTHLY_TIMING  = "Timing"
-TAB_MONTHLY_PLAN    = "Monthly Plan"
+TAB_MONTHLY_PLAN    = "Monthly Cash Flow"
+TAB_PL_ANNUAL       = "Annual P&L"
+TAB_PL_MONTHLY      = "Monthly P&L"
 
 INTEGER_ROWS = ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units", "Engineers",
                 "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs")
 
 MONTHLY_LINE_ITEMS = [
     "Engineering Cost", "Business Dev Cost", "Other Costs",
-    "Dragonfly Maturation", "Dragonfly COGS", "Dragonfly Revenue",
-    "Eterna Maturation",    "Eterna COGS",    "Eterna Revenue",
-    "Ravenity Maturation",  "Ravenity COGS",  "Ravenity Revenue",
-    "SparV Maturation",     "SparV COGS",     "SparV Revenue",
+    "Dragonfly Maturation", "Dragonfly Expenses", "Dragonfly Revenue",
+    "Eterna Maturation",    "Eterna Expenses",    "Eterna Revenue",
+    "Ravenity Maturation",  "Ravenity Expenses",  "Ravenity Revenue",
+    "SparV Maturation",     "SparV Expenses",     "SparV Revenue",
     "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs",
     "Grant Revenue", "SW Dev Revenue",
-    "Total Cost", "Total Revenue", "Oper Profit/Loss",
-    "Cumulative Oper P/L", "Capital Needed", "Cumulative Capital",
+    "Total Expenses", "Total Revenue", "Net Cashflow",
+    "Cumulative Cashflow", "Capital Needed", "Cumulative Capital",
+]
+
+MONTHLY_PL_LINE_ITEMS = [
+    "Grant Revenue", "SW Dev Revenue",
+    "Dragonfly Revenue", "Eterna Revenue", "Ravenity Revenue", "SparV Revenue",
+    "Total Revenue",
+    "Dragonfly COGS", "Eterna COGS", "Ravenity COGS", "SparV COGS",
+    "Total COGS",
+    "Gross Profit",
+    "Engineering Cost", "Business Dev Cost", "Other Costs",
+    "Dragonfly Maturation", "Eterna Maturation", "Ravenity Maturation", "SparV Maturation",
+    "Total OpEx",
+    "Net Operating Income",
+    "Cumulative NOI",
 ]
 
 
@@ -216,7 +232,7 @@ def read_monthly_timing(sh):
 
 
 def write_monthly_plan(sh, results):
-    """Write monthly plans to the Monthly Plan tab."""
+    """Write monthly cash flow plans to the Monthly Cash Flow tab."""
     ws = _ws(sh, TAB_MONTHLY_PLAN)
     ws.clear()
 
@@ -227,6 +243,47 @@ def write_monthly_plan(sh, results):
         all_rows.append(["Metric"] + month_labels)
         for col in MONTHLY_LINE_ITEMS:
             all_rows.append([col] + [round(r.get(col, 0)) for r in monthly_rows])
+        all_rows.append([])
+        all_rows.append([])
+
+    if all_rows:
+        ws.update("A1", all_rows)
+
+
+def write_pl_output(sh, results):
+    """Write P&L annual results to the Annual P&L tab."""
+    ws = _ws(sh, TAB_PL_ANNUAL)
+    ws.clear()
+
+    all_rows = []
+    for (label, pl_df_result, investment, total_return, roi, moic, payback_year) in results:
+        all_rows.append([f"=== {label} ==="])
+        all_rows.append(["Metric"] + list(pl_df_result.columns))
+        for row_name in pl_df_result.index:
+            row_vals = [row_name]
+            for col in pl_df_result.columns:
+                val = pl_df_result.loc[row_name, col]
+                row_vals.append(int(val) if row_name in INTEGER_ROWS else round(float(val), 2))
+            all_rows.append(row_vals)
+        all_rows.append([])
+        all_rows.append([])
+
+    if all_rows:
+        ws.update("A1", all_rows)
+
+
+def write_pl_monthly(sh, results):
+    """Write P&L monthly plans to the Monthly P&L tab."""
+    ws = _ws(sh, TAB_PL_MONTHLY)
+    ws.clear()
+
+    all_rows = []
+    for label, pl_monthly_rows in results:
+        month_labels = [r["Month"] for r in pl_monthly_rows]
+        all_rows.append([f"=== {label} ==="])
+        all_rows.append(["Metric"] + month_labels)
+        for col in MONTHLY_PL_LINE_ITEMS:
+            all_rows.append([col] + [round(r.get(col, 0)) for r in pl_monthly_rows])
         all_rows.append([])
         all_rows.append([])
 
