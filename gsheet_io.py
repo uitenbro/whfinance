@@ -31,6 +31,7 @@ MONTHLY_LINE_ITEMS = [
     "Eterna Maturation",    "Eterna Expenses",    "Eterna Revenue",
     "Ravenity Maturation",  "Ravenity Expenses",  "Ravenity Revenue",
     "SparV Maturation",     "SparV Expenses",     "SparV Revenue",
+    "Dragonfly Units", "Eterna Missions", "Ravenity Units", "SparV Units",
     "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs",
     "Grant Revenue", "SW Dev Revenue",
     "Total Expenses", "Total Revenue", "Net Cashflow",
@@ -38,6 +39,7 @@ MONTHLY_LINE_ITEMS = [
 ]
 
 MONTHLY_PL_LINE_ITEMS = [
+    "Dragonfly Units Sold", "Eterna Missions Sold", "Ravenity Units Sold", "SparV Units Sold",
     "Grant Revenue", "SW Dev Revenue",
     "Dragonfly Revenue", "Eterna Revenue", "Ravenity Revenue", "SparV Revenue",
     "Total Revenue",

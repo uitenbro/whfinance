@@ -219,6 +219,10 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
             "SparV Maturation":      sv_mat,
             "SparV Expenses":        sv_cogs,
             "SparV Revenue":         sv_rev,
+            "Dragonfly Units":     df_u,
+            "Eterna Missions":     et_ms,
+            "Ravenity Units":      rv_u,
+            "SparV Units":         sv_u,
             "Dragonfly Techs":     df_techs,
             "Eterna Techs":        et_techs,
             "Ravenity Techs":      rv_techs,
@@ -260,7 +264,11 @@ def run_model(df_scenario, eterna_scenario, ravenity_scenario, sparv_scenario, f
         pa["_et_techs"]             = max(pa["_et_techs"], et_techs)
 
         pl_monthly_rows.append({
-            "Month":               month_label,
+            "Month":                  month_label,
+            "Dragonfly Units Sold":   df_units_sold,
+            "Eterna Missions Sold":   et_missions_sold,
+            "Ravenity Units Sold":    rv_units_sold,
+            "SparV Units Sold":       sv_units_sold,
             "Grant Revenue":       grant,
             "SW Dev Revenue":      sw_r,
             "Dragonfly Revenue":   df_rev,
