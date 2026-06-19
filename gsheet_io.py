@@ -14,6 +14,7 @@ TAB_DRAGONFLY    = "Dragonfly Scenarios"
 TAB_ETERNA       = "Eterna Scenarios"
 TAB_RAVENITY     = "Ravenity Scenarios"
 TAB_SPARV        = "SparV Scenarios"
+TAB_ELECTRONICS  = "Electronics Scenarios"
 TAB_FINANCE      = "Finance Scenarios"
 TAB_COMBINATIONS    = "Scenario Combinations"
 TAB_OUTPUT          = "Annual Cash Flow"
@@ -22,8 +23,8 @@ TAB_MONTHLY_PLAN    = "Monthly Cash Flow"
 TAB_PL_ANNUAL       = "Annual P&L"
 TAB_PL_MONTHLY      = "Monthly P&L"
 
-INTEGER_ROWS = ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units", "Engineers",
-                "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs")
+INTEGER_ROWS = ("Dragonfly Units", "Ravenity Units", "Eterna Missions", "SparV Units", "Electronics Units", "Engineers",
+                "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Electronics Techs", "Total Techs")
 
 MONTHLY_LINE_ITEMS = [
     "Engineering Cost", "Business Dev Cost", "Other Costs",
@@ -31,8 +32,9 @@ MONTHLY_LINE_ITEMS = [
     "Eterna Maturation",    "Eterna Expenses",    "Eterna Revenue",
     "Ravenity Maturation",  "Ravenity Expenses",  "Ravenity Revenue",
     "SparV Maturation",     "SparV Expenses",     "SparV Revenue",
-    "Dragonfly Units", "Eterna Missions", "Ravenity Units", "SparV Units",
-    "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Total Techs",
+    "Electronics Maturation", "Electronics Expenses", "Electronics Revenue",
+    "Dragonfly Units", "Eterna Missions", "Ravenity Units", "SparV Units", "Electronics Units",
+    "Dragonfly Techs", "Eterna Techs", "Ravenity Techs", "SparV Techs", "Electronics Techs", "Total Techs",
     "Grant Revenue", "SW Dev Revenue",
     "Total Expenses", "Total Revenue", "Net Cashflow",
     "Cumulative Cashflow", "Capital Needed", "Cumulative Capital",
@@ -40,14 +42,16 @@ MONTHLY_LINE_ITEMS = [
 
 MONTHLY_PL_LINE_ITEMS = [
     "Dragonfly Units Sold", "Eterna Missions Sold", "Ravenity Units Sold", "SparV Units Sold",
+    "Electronics Units Sold",
     "Grant Revenue", "SW Dev Revenue",
-    "Dragonfly Revenue", "Eterna Revenue", "Ravenity Revenue", "SparV Revenue",
+    "Dragonfly Revenue", "Eterna Revenue", "Ravenity Revenue", "SparV Revenue", "Electronics Revenue",
     "Total Revenue",
-    "Dragonfly COGS", "Eterna COGS", "Ravenity COGS", "SparV COGS",
+    "Dragonfly COGS", "Eterna COGS", "Ravenity COGS", "SparV COGS", "Electronics COGS",
     "Total COGS",
     "Gross Profit",
     "Engineering Cost", "Business Dev Cost", "Other Costs",
     "Dragonfly Maturation", "Eterna Maturation", "Ravenity Maturation", "SparV Maturation",
+    "Electronics Maturation",
     "Total OpEx",
     "Net Operating Income",
     "Cumulative NOI",
@@ -163,6 +167,76 @@ def read_sparv_scenarios(sh):
     } for r in _records_transposed(sh, TAB_SPARV)]
 
 
+def read_electronics_products(sh):
+    """Read the Electronics Scenarios tab. Returns a list of enabled product dicts.
+
+    Tab layout:
+      Top section  — key/value rows: col A = setting name, col B = value.
+                     Any field can have a default: default_price, default_cost, etc.
+      Separator    — a row with "Products" in col A signals the end of defaults;
+                     the very next row is the column-header row (include, label, price, …).
+      Product rows — one product per row after the header; blank cells inherit the
+                     matching global default.
+    """
+    try:
+        values = _ws(sh, TAB_ELECTRONICS).get_all_values()
+    except Exception:
+        return []
+    if not values:
+        return []
+
+    # Scan for global defaults; stop at the "Products" sentinel row.
+    defaults = {}
+    header_idx = None
+    for i, row in enumerate(values):
+        if not row or not row[0].strip():
+            continue
+        if row[0].strip().lower() == "products":
+            # The column-header row (include, label, …) is immediately after.
+            if i + 1 < len(values):
+                header_idx = i + 1
+            break
+        if len(row) >= 2 and row[1].strip():
+            defaults[row[0].strip()] = row[1].strip()
+
+    if header_idx is None:
+        return []
+
+    headers = [h.strip() for h in values[header_idx]]
+
+    def _v(record, key, default_key=None):
+        """Return the cell value, falling back to a global default if blank."""
+        val = record.get(key, "").strip()
+        if not val and default_key:
+            val = defaults.get(default_key, "").strip()
+        return val
+
+    products = []
+    for row in values[header_idx + 1:]:
+        if not row or not row[0].strip():
+            continue
+        record = {headers[j]: (row[j].strip() if j < len(row) else "") for j in range(len(headers))}
+
+        if str(record.get("include", "")).upper() not in ("TRUE", "YES", "1", "Y"):
+            continue
+
+        products.append({
+            "label":                      record.get("label", "").strip(),
+            "price":                      float(_v(record, "price",                      "default_price")                      or 0),
+            "cost":                       float(_v(record, "cost",                       "default_cost")                       or 0),
+            "initial_units":              _int(_v(record,  "initial_units",              "default_initial_units")              or 0),
+            "growth":                     float(_v(record, "growth",                     "default_growth")                     or 1.0),
+            "maturation_cost":            float(_v(record, "maturation_cost",            "default_maturation_cost")            or 0),
+            "maturation_start_month":     _int(_v(record,  "maturation_start_month",     "default_maturation_start_month")     or 1),
+            "maturation_duration_months": max(1, _int(_v(record, "maturation_duration_months", "default_maturation_duration_months") or 1)),
+            "cogs_start_month":           _int(_v(record,  "cogs_start_month",           "default_cogs_start_month")           or 1),
+            "revenue_lag_months":         _int(_v(record,  "revenue_lag_months",         "default_revenue_lag_months")         or 0),
+            "production_per_tech_daily":  float(_v(record, "production_per_tech_daily",  "default_production_per_tech_daily")  or 0),
+        })
+
+    return products
+
+
 def read_finance_scenarios(sh):
     result = []
     for r in _records_transposed(sh, TAB_FINANCE):
@@ -185,12 +259,15 @@ def read_scenario_combinations(sh):
         enabled = r.get("enabled", "TRUE")
         if str(enabled).upper() in ("FALSE", "0", "NO", ""):
             continue
+        el = r.get("electronics", "TRUE")
         result.append({
-            "dragonfly": r.get("dragonfly") or None,
-            "eterna":    r.get("eterna")    or None,
-            "ravenity":  r.get("ravenity")  or None,
-            "sparv":     r.get("sparv")     or None,
-            "finance":   r["finance"],
+            "label":       r.get("label") or None,
+            "dragonfly":   r.get("dragonfly") or None,
+            "eterna":      r.get("eterna")    or None,
+            "ravenity":    r.get("ravenity")  or None,
+            "sparv":       r.get("sparv")     or None,
+            "electronics": str(el).upper() not in ("FALSE", "0", "NO"),
+            "finance":     r["finance"],
         })
     return result
 

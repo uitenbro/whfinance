@@ -12,7 +12,7 @@ import os
 import gspread
 from gsheet_io import (
     CREDENTIALS_FILE, TOKEN_FILE, CONFIG_FILE, TOTAL_YEARS,
-    TAB_DRAGONFLY, TAB_ETERNA, TAB_RAVENITY, TAB_SPARV,
+    TAB_DRAGONFLY, TAB_ETERNA, TAB_RAVENITY, TAB_SPARV, TAB_ELECTRONICS,
     TAB_FINANCE, TAB_COMBINATIONS, TAB_OUTPUT,
     TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN,
 )
@@ -111,6 +111,39 @@ sparv_scenarios = [
     },
 ]
 
+# Electronics Scenarios — row-per-product catalog.
+# Defaults apply to any product row that leaves a field blank.
+electronics_defaults = {
+    "default_price":                      "",
+    "default_cost":                       "",
+    "default_initial_units":              "",
+    "default_growth":                     1.10,
+    "default_maturation_start_month":     1,
+    "default_maturation_cost":            0,
+    "default_maturation_duration_months": 12,
+    "default_cogs_start_month":           13,
+    "default_revenue_lag_months":         1,
+    "default_production_per_tech_daily":  1,
+}
+
+# Seed with one disabled example row so the format is visible without affecting the model.
+electronics_product_seeds = [
+    {
+        "include":                    False,
+        "label":                      "Example Component",
+        "price":                      500,
+        "cost":                       150,
+        "initial_units":              500,
+        "growth":                     "",   # blank → inherits default_growth
+        "production_per_tech_daily":  "",   # blank → inherits default
+        "maturation_cost":            50000,
+        "maturation_start_month":     "",   # blank → inherits default
+        "maturation_duration_months": "",   # blank → inherits default
+        "cogs_start_month":           "",   # blank → inherits default
+        "revenue_lag_months":         "",   # blank → inherits default
+    },
+]
+
 financial_scenarios = [
     {
         "label":                          "Scale to 22 Engr and $1.2M Other Costs",
@@ -126,11 +159,13 @@ financial_scenarios = [
 
 scenario_combinations = [
     {
-        "dragonfly": "Dragonfly 125+35%",
-        "eterna":    "Eterna 4/wk Services DoD",
-        "ravenity":  "Ravenity 2500+35%",
-        "sparv":     "SparV 1500+25%",
-        "finance":   "Scale to 22 Engr and $1.2M Other Costs",
+        "label":       "Base Case",
+        "dragonfly":   "Dragonfly 125+35%",
+        "eterna":      "Eterna 4/wk Services DoD",
+        "ravenity":    "Ravenity 2500+35%",
+        "sparv":       "SparV 1500+25%",
+        "electronics": True,
+        "finance":     "Scale to 22 Engr and $1.2M Other Costs",
     },
 ]
 
@@ -178,6 +213,25 @@ def _populate_sparv(ws, scenarios):
     ws.update("A1", _transpose(fields, scenarios, lambda s, f: s[f]))
 
 
+def _populate_electronics(ws, defaults, products):
+    _PRODUCT_FIELDS = [
+        "include", "label", "price", "cost", "initial_units", "growth",
+        "production_per_tech_daily", "maturation_cost", "maturation_start_month",
+        "maturation_duration_months", "cogs_start_month", "revenue_lag_months",
+    ]
+    rows = []
+    for key, val in defaults.items():
+        rows.append([key, val])
+    rows.append([])             # blank row for visual separation
+    rows.append(["Products"])   # sentinel — parser starts product table on the next row
+    rows.append(_PRODUCT_FIELDS)
+    for p in products:
+        rows.append(
+            ["TRUE" if p["include"] else "FALSE"] + [p.get(f, "") for f in _PRODUCT_FIELDS[1:]]
+        )
+    ws.update("A1", rows)
+
+
 def _populate_finance(ws, scenarios):
     yr_list_fields = {
         **{f"fte_count_yr{i}":        ("fte_count_by_year",        i - 1) for i in range(1, TOTAL_YEARS + 1)},
@@ -206,14 +260,16 @@ def _populate_monthly_timing(ws):
 
 
 def _populate_combinations(ws, combinations):
-    fields = ["enabled", "dragonfly", "eterna", "ravenity", "sparv", "finance"]
+    fields = ["enabled", "label", "dragonfly", "eterna", "ravenity", "sparv", "electronics", "finance"]
     values = {
-        "enabled":   [True] * len(combinations),
-        "dragonfly": [c.get("dragonfly") or "" for c in combinations],
-        "eterna":    [c.get("eterna")    or "" for c in combinations],
-        "ravenity":  [c.get("ravenity")  or "" for c in combinations],
-        "sparv":     [c.get("sparv")     or "" for c in combinations],
-        "finance":   [c["finance"]            for c in combinations],
+        "enabled":     [True] * len(combinations),
+        "label":       [c.get("label")                  or "" for c in combinations],
+        "dragonfly":   [c.get("dragonfly")              or "" for c in combinations],
+        "eterna":      [c.get("eterna")                 or "" for c in combinations],
+        "ravenity":    [c.get("ravenity")               or "" for c in combinations],
+        "sparv":       [c.get("sparv")                  or "" for c in combinations],
+        "electronics": [c.get("electronics", True)           for c in combinations],
+        "finance":     [c["finance"]                         for c in combinations],
     }
     ws.update("A1", [[f] + values[f] for f in fields])
 
@@ -230,8 +286,8 @@ def main():
     print(f"Created spreadsheet: {sh.url}\n")
 
     sh.sheet1.update_title(TAB_DRAGONFLY)
-    for title in [TAB_ETERNA, TAB_RAVENITY, TAB_SPARV, TAB_FINANCE, TAB_COMBINATIONS,
-                  TAB_OUTPUT, TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN]:
+    for title in [TAB_ETERNA, TAB_RAVENITY, TAB_SPARV, TAB_ELECTRONICS, TAB_FINANCE,
+                  TAB_COMBINATIONS, TAB_OUTPUT, TAB_MONTHLY_TIMING, TAB_MONTHLY_PLAN]:
         sh.add_worksheet(title=title, rows=100, cols=40)
 
     print(f"Populating {TAB_DRAGONFLY}...")
@@ -245,6 +301,9 @@ def main():
 
     print(f"Populating {TAB_SPARV}...")
     _populate_sparv(sh.worksheet(TAB_SPARV), sparv_scenarios)
+
+    print(f"Populating {TAB_ELECTRONICS}...")
+    _populate_electronics(sh.worksheet(TAB_ELECTRONICS), electronics_defaults, electronics_product_seeds)
 
     print(f"Populating {TAB_FINANCE}...")
     _populate_finance(sh.worksheet(TAB_FINANCE), financial_scenarios)
