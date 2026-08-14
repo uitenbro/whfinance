@@ -35,6 +35,8 @@ CAP TABLE DILUTION MODEL & MATHEMATICAL FORMULAS
 """
 
 import pandas as pd
+import matplotlib.pyplot as plt
+import math
 
 # ==============================================================================
 # 1. INITIAL CAP TABLE (PRE-SAFE)
@@ -86,7 +88,9 @@ for stakeholder, pct in initial_cap_table.items():
 # ==============================================================================
 # 3. SCENARIO MODELING: $2M NEW INVESTMENT AT $2M TO $8M PRE-MONEY
 # ==============================================================================
-pre_money_valuations = [2500000, 3500000, 4000000, 4500000, 4750000, 5000000, 5250000, 5500000, 5750000, 6000000, 6500000, 7000000, 7500000, 8000000]
+pre_money_valuations = [3000000, 3500000, 3750000, 4000000, 4250000, 4500000, 4750000, 5000000, 5250000, 5500000, 5750000, 6000000, 6250000, 7000000, 8000000]
+# Ensure scenarios are processed from high to low valuation
+pre_money_valuations = sorted(pre_money_valuations, reverse=True)
 investment_amount = 2000000
 total_safes_amount = 150000
 
@@ -146,3 +150,93 @@ df_formatted = df.round(2)
 
 # Display the final table
 print(df_formatted.to_string())
+
+
+# ==============================================================================
+# 5. PIE CHARTS: one pie per DataFrame column on a single page
+# ==============================================================================
+def plot_pie_charts(df: pd.DataFrame, output_path: str = "cap_table_pies.png"):
+    cols = list(df.columns)
+    n = len(cols)
+    # Force a 6 x 3 layout as requested
+    ncols = 6
+    nrows = 3
+
+    # Smaller per-subplot footprint to create a compact overall figure
+    fig_width = 2.5 * ncols
+    fig_height = 2.5 * nrows
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(fig_width, fig_height))
+
+    # Flatten axes to iterate easily; if there are unused axes, hide them
+    axes_list = axes.flatten() if hasattr(axes, "flatten") else [axes]
+
+    # Prepare colors mapped to stakeholders so the same color is used across pies
+    stakeholders = list(df.index)
+    cmap = plt.get_cmap('tab20')
+    palette = [cmap(i) for i in range(len(stakeholders))]
+    color_map = dict(zip(stakeholders, palette))
+
+    # Hide all axes initially
+    for ax in axes_list:
+        ax.axis('off')
+
+    for i, col in enumerate(cols):
+        ax = axes_list[i]
+        series = df[col]
+        labels = list(series.index)
+        sizes = list(series.values.astype(float))
+
+        # Avoid plotting empty or zero-sum columns
+        total = sum(sizes)
+        if total <= 0:
+            ax.text(0.5, 0.5, 'No data', horizontalalignment='center', verticalalignment='center')
+            ax.set_title(col)
+            ax.axis('off')
+            continue
+
+        pie_colors = [color_map.get(lbl, (0.7, 0.7, 0.7)) for lbl in labels]
+
+        # Plot pie WITHOUT slice labels; only show percentages via autopct
+        wedges, texts, autotexts = ax.pie(
+            sizes,
+            labels=None,
+            colors=pie_colors,
+            autopct='%1.1f%%',
+            startangle=90,
+            textprops={'fontsize': 7}
+        )
+        # Smaller title/font for compactness
+        ax.set_title(col, fontsize=9)
+        # Reduce autotext size for compactness
+        for t in autotexts:
+            t.set_fontsize(7)
+        ax.axis('equal')
+
+    # Create a single legend for stakeholder color mapping
+    from matplotlib.patches import Patch
+    legend_handles = [Patch(facecolor=color_map[s], label=s) for s in stakeholders]
+
+    # Tighter spacing between subplots
+    fig.subplots_adjust(wspace=0.08, hspace=0.25)
+
+    total_slots = ncols * nrows
+    # If there is at least one spare subplot, place the legend in the final slot
+    if n < total_slots:
+        legend_ax = axes_list[-1]
+        legend_ax.axis('off')
+        legend_ax.legend(handles=legend_handles, loc='center', fontsize=7, frameon=False)
+        plt.tight_layout()
+    else:
+        # Fallback: place legend to the right of the grid
+        plt.tight_layout(rect=[0, 0, 0.82, 1])
+        fig.legend(handles=legend_handles, loc='center left', bbox_to_anchor=(0.86, 0.5), fontsize=7, frameon=False)
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    try:
+        plt.show()
+    except Exception:
+        pass
+
+
+if __name__ == '__main__':
+    # Use the formatted DataFrame for plotting (rounded percentages)
+    plot_pie_charts(df_formatted)
