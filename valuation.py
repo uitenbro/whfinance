@@ -91,7 +91,7 @@ for stakeholder, pct in initial_cap_table.items():
 pre_money_valuations = [3000000, 3500000, 3750000, 4000000, 4250000, 4500000, 4750000, 5000000, 5250000, 5500000, 5750000, 6000000, 6250000, 7000000, 8000000]
 # Ensure scenarios are processed from high to low valuation
 pre_money_valuations = sorted(pre_money_valuations, reverse=True)
-investment_amount = 2000000
+investment_amount = 3000000
 total_safes_amount = 150000
 
 scenarios = {}
@@ -145,11 +145,28 @@ df = pd.DataFrame({
 for label, scenario_data in scenarios.items():
     df[label] = pd.Series(scenario_data)
 
+# Create a compact summary table with the valuation as the row index and
+# Nate + Matt ownership side-by-side with the new investor ownership.
+summary_rows = []
+for label in [f"${pre / 1_000_000:g}M" for pre in sorted(pre_money_valuations, reverse=True)]:
+    scenario = scenarios[label]
+    summary_rows.append({
+        'Valuation': label,
+        'Nate + Matt': scenario['Nate'] + scenario['Matt'],
+        'New Investor': scenario['New Investor']
+    })
+
+ownership_summary_df = pd.DataFrame(summary_rows).set_index('Valuation')
+ownership_summary_df = ownership_summary_df[['Nate + Matt', 'New Investor']].round(2)
+
 # Round all output values to 2 decimal places for clean percentage presentation
 df_formatted = df.round(2)
 
-# Display the final table
+# Display the final tables
+print('COMPLETE CAP TABLE')
 print(df_formatted.to_string())
+print('\nNATE + MATT vs NEW INVESTOR')
+print(ownership_summary_df.to_string())
 
 
 # ==============================================================================
