@@ -2,3 +2,4 @@ pandas
 matplotlib
 gspread
 google-auth-oauthlib
+streamlit
