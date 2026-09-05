@@ -47,7 +47,7 @@ import math
 initial_cap_table = {
     'Matt': 52.0,
     'Nate': 20.0,
-    'Fred-non-dilutable': 0.0,        # Non-dilutable
+    # 'Fred-non-dilutable': 0.0,        # Non-dilutable
     'Fred--dilutable': 15.0,        
     'O-Star': 10.0,                   # Non-dilutable
     'Luke': 1.0,
@@ -57,7 +57,7 @@ initial_cap_table = {
     'New Investor': 0.0
 }
 # These stakeholders retain their initial percentages regardless of dilution.
-non_dilutable = ['Fred-non-dilutable', 'O-Star'] 
+non_dilutable = ['O-Star'] 
 
 # ==============================================================================
 # 2. POST-SAFE BASELINE CALCULATION ($10M Valuation Cap)
@@ -217,7 +217,7 @@ def plot_pie_charts(
         pie_colors = [color_map.get(lbl, (0.7, 0.7, 0.7)) for lbl in labels]
 
         def show_large_slice_pct(pct):
-            return f'{pct:.1f}%' if pct >= 5.0 else ''
+            return f'{pct:.1f}%' if pct >= 3.5 else ''
 
         _, _, autotexts = pie_ax.pie(
             sizes,
