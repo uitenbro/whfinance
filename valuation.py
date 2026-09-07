@@ -12,12 +12,15 @@ CAP TABLE DILUTION MODEL & MATHEMATICAL FORMULAS
    Example ($2M Investment at $5M Pre / $7M Post):
    New Investor % = ($2,000,000 / $7,000,000) * 100 = 28.57%
 
-3. SAFE Conversion Ownership % (Down-Round Protection):
-   SAFE % = (Total SAFE Amount / Post-Money Valuation) * 100
-   * Applies whenever Post-Money Valuation <= $10,000,000 Valuation Cap
-   
-   Example ($150,000 SAFEs at $5M Pre / $7M Post):
-   SAFE % = ($150,000 / $7,000,000) * 100 = 2.14%
+3. SAFE Conversion Ownership % (two SAFEs, $10,000,000 cap each):
+   Mike ($100,000, MFN clause) = Amount / MIN(Post-Money, Cap) * 100
+   * Down-round protected: benefits if Post-Money < Cap, floored at his cap %
+   Noah ($50,000, no MFN clause) = Amount / Cap * 100 (always fixed at 0.50%)
+
+   Example (Mike + Noah at $5M Pre / $7M Post, both below the $10M cap):
+   Mike % = ($100,000 / $7,000,000) * 100 = 1.43%
+   Noah % = ($50,000 / $10,000,000) * 100 = 0.50%
+   SAFE % = 1.43% + 0.50% = 1.93%
 
 4. Dilutable Pool Scale Factor:
    Dilutable Scale Factor = (100% - Non-Dilutable % - Investor % - SAFE %) / Initial Dilutable Base %
@@ -53,8 +56,9 @@ initial_cap_table = {
     'Luke': 1.0,
     'Casey': 1.0,
     'JB': 1.0,
-    'SAFEs': 0.0,
-    'New Investor': 0.0
+    'Mike (SAFE)': 0.0,
+    'Noah (SAFE)': 0.0,
+    'ASI Investor': 0.0
 }
 # These stakeholders retain their initial percentages regardless of dilution.
 non_dilutable = ['O-Star'] 
@@ -62,17 +66,41 @@ non_dilutable = ['O-Star']
 # ==============================================================================
 # 2. POST-SAFE BASELINE CALCULATION ($10M Valuation Cap)
 # ==============================================================================
-# SAFEs Total: $150,000 ($100k Soares + $50k Shamburger) at a $10M Post-Money Cap.
-# Baseline SAFE Ownership % = $150,000 / $10,000,000 = 1.50%
-safe_baseline_pct = 1.50
+# Two SAFEs, both at a $10M Post-Money Cap, but only Mike's carries an MFN
+# (most-favored-nation) clause:
+#   - Mike:  $100,000, MFN -> converts at whichever is better for him: his
+#            cap or the round's actual (lower) post-money valuation.
+#   - Noah:  $50,000, no MFN -> always converts at his fixed cap-based %,
+#            regardless of how the round is priced.
+mike_safe_amount = 100_000
+mike_safe_cap = 10_000_000
+noah_safe_amount = 50_000
+noah_safe_cap = 10_000_000
+
+# Fixed cap-based baseline %, used directly for Noah and as Mike's baseline
+# (pre-round) and worst-case (round priced above his cap) percentage.
+mike_baseline_pct = (mike_safe_amount / mike_safe_cap) * 100.0   # 1.00%
+noah_baseline_pct = (noah_safe_amount / noah_safe_cap) * 100.0   # 0.50%
+safe_baseline_pct = mike_baseline_pct + noah_baseline_pct        # 1.50%
+
+# Set to False to model the SAFEs NOT converting to equity (e.g. repaid in cash
+# or otherwise settled outside the cap table). When False, SAFE holders get 0%
+# equity and the dilutable pool is not reduced by the SAFE amount.
+SAFES_CONVERT = True
 
 fixed_non_dilutable_pct = sum(
     initial_cap_table[stakeholder] for stakeholder in non_dilutable
 )
 dilutable_initial_pct = sum(
     pct for stakeholder, pct in initial_cap_table.items()
-    if stakeholder not in non_dilutable and stakeholder not in ['SAFEs', 'New Investor']
+    if stakeholder not in non_dilutable
+    and stakeholder not in ['Mike (SAFE)', 'Noah (SAFE)', 'ASI Investor']
 )
+
+if not SAFES_CONVERT:
+    mike_baseline_pct = 0.0
+    noah_baseline_pct = 0.0
+    safe_baseline_pct = 0.0
 
 # Equity remaining for the dilutable pool after non-dilutable stakeholders and
 # baseline SAFEs:
@@ -86,9 +114,11 @@ for stakeholder, pct in initial_cap_table.items():
     if stakeholder in non_dilutable:
         # Non-dilutable stakeholders retain their exact initial percentage
         post_safe_cap_table[stakeholder] = pct
-    elif stakeholder == 'SAFEs':
-        post_safe_cap_table[stakeholder] = safe_baseline_pct
-    elif stakeholder == 'New Investor':
+    elif stakeholder == 'Mike (SAFE)':
+        post_safe_cap_table[stakeholder] = mike_baseline_pct
+    elif stakeholder == 'Noah (SAFE)':
+        post_safe_cap_table[stakeholder] = noah_baseline_pct
+    elif stakeholder == 'ASI Investor':
         post_safe_cap_table[stakeholder] = 0.0
     else:
         # Dilutable stakeholders are scaled down proportionally
@@ -103,7 +133,6 @@ pre_money_valuations = [1000000, 1500000, 2000000, 2500000, 3000000, 1920000, 40
 # Ensure scenarios are processed from high to low valuation
 pre_money_valuations = sorted(pre_money_valuations, reverse=True)
 investment_amount = 2000000
-total_safes_amount = 150000
 
 
 scenarios = {}
@@ -111,30 +140,41 @@ scenarios = {}
 for pre_money in pre_money_valuations:
     # Formula 1: Post-Money Valuation
     post_money = pre_money + investment_amount
-    
+
     # Formula 2: New Investor Ownership %
     investor_pct = (investment_amount / post_money) * 100.0
-    
+
     # Formula 3: SAFE Conversion Ownership %
-    # Under YC Post-Money SAFE rules, if the round's post-money valuation is 
-    # <= the $10M cap, SAFEs convert at the round's lower post-money price:
-    # $150,000 / Post-Money Valuation
-    safe_pct = (total_safes_amount / post_money) * 100.0
-    
+    # Mike (MFN): converts at whichever valuation is lower -- his $10M cap or
+    # the round's actual post-money -- so he never does worse than his cap.
+    # Noah (no MFN): always converts at his fixed cap-based %, unaffected by
+    # how this round is priced.
+    # If SAFES_CONVERT is False, neither SAFE converts to equity (e.g. they
+    # are repaid in cash) and both take 0% of the cap table.
+    if SAFES_CONVERT:
+        mike_pct = (mike_safe_amount / min(post_money, mike_safe_cap)) * 100.0
+        noah_pct = noah_baseline_pct
+    else:
+        mike_pct = 0.0
+        noah_pct = 0.0
+    safe_pct = mike_pct + noah_pct
+
     # Formula 4: Remaining dilutable equity and scale factor calculation
     # Total (100%) - Non-dilutable (25%) - New Investor % - SAFE %
     remaining_dilutable_equity = 100.0 - fixed_non_dilutable_pct - investor_pct - safe_pct
     scenario_scale_factor = remaining_dilutable_equity / dilutable_initial_pct
-    
+
     # Formula 5: Populate individual stakeholder percentages
     current_scenario = {}
     for stakeholder, initial_pct in initial_cap_table.items():
         if stakeholder in non_dilutable:
             # Non-dilutable: percentage stays locked
             current_scenario[stakeholder] = initial_pct
-        elif stakeholder == 'SAFEs':
-            current_scenario[stakeholder] = safe_pct
-        elif stakeholder == 'New Investor':
+        elif stakeholder == 'Mike (SAFE)':
+            current_scenario[stakeholder] = mike_pct
+        elif stakeholder == 'Noah (SAFE)':
+            current_scenario[stakeholder] = noah_pct
+        elif stakeholder == 'ASI Investor':
             current_scenario[stakeholder] = investor_pct
         else:
             # Dilutable: scale down based on remaining available equity
@@ -165,11 +205,11 @@ for label in [f"${pre / 1_000_000:g}M" for pre in sorted(pre_money_valuations, r
     summary_rows.append({
         'Valuation': label,
         'Nate + Matt': scenario['Nate'] + scenario['Matt'],
-        'New Investor': scenario['New Investor']
+        'ASI Investor': scenario['ASI Investor']
     })
 
 ownership_summary_df = pd.DataFrame(summary_rows).set_index('Valuation')
-ownership_summary_df = ownership_summary_df[['Nate + Matt', 'New Investor']].round(2)
+ownership_summary_df = ownership_summary_df[['Nate + Matt', 'ASI Investor']].round(2)
 
 # Round all output values to 2 decimal places for clean percentage presentation
 df_formatted = df.round(2)
@@ -177,7 +217,7 @@ df_formatted = df.round(2)
 # Display the final tables
 print('COMPLETE CAP TABLE')
 print(df_formatted.to_string())
-print('\nNATE + MATT vs NEW INVESTOR')
+print('\nNATE + MATT vs ASI INVESTOR')
 print(ownership_summary_df.to_string())
 
 
@@ -188,14 +228,15 @@ def plot_pie_charts(
     df: pd.DataFrame,
     output_path: str = "cap_table_pies.png",
     show_plot: bool = True,
-    figsize: tuple[float, float] = (12, 10)
+    figsize: tuple[float, float] = (18, 6.5)
 ):
     selected_columns = list(df.columns[:2])
     chart_df = df[selected_columns]
     fig = plt.figure(figsize=figsize)
-    grid = fig.add_gridspec(2, 2, height_ratios=[2.6, 2.0], hspace=0.04, wspace=0.28)
-    pie_axes = [fig.add_subplot(grid[0, column]) for column in range(2)]
-    table_axes = [fig.add_subplot(grid[1, column]) for column in range(2)]
+    # One row: [pie, table, pie, table] so each chart sits next to its table.
+    grid = fig.add_gridspec(1, 4, width_ratios=[1.0, 1.1, 1.0, 1.1], wspace=0.15)
+    pie_axes = [fig.add_subplot(grid[0, column]) for column in (0, 2)]
+    table_axes = [fig.add_subplot(grid[0, column]) for column in (1, 3)]
 
     # Prepare colors mapped to stakeholders so the same color is used across pies
     stakeholders = list(chart_df.index)
@@ -203,14 +244,13 @@ def plot_pie_charts(
     palette = [cmap(i) for i in range(len(stakeholders))]
     color_map = dict(zip(stakeholders, palette))
 
-    for pie_ax, table_ax, (col, series) in zip(pie_axes, table_axes, chart_df.items()):
+    for pie_ax, table_ax, (_, series) in zip(pie_axes, table_axes, chart_df.items()):
         labels = list(series.index)
         sizes = list(series.values.astype(float))
 
         total = sum(sizes)
         if total <= 0:
             pie_ax.text(0.5, 0.5, 'No data', horizontalalignment='center', verticalalignment='center')
-            pie_ax.set_title(col)
             pie_ax.axis('off')
             continue
 
@@ -225,23 +265,23 @@ def plot_pie_charts(
             colors=pie_colors,
             autopct=show_large_slice_pct,
             startangle=90,
-            textprops={'fontsize': 6}
+            textprops={'fontsize': 14}
         )
         for t in autotexts:
-            t.set_fontsize(6)
+            t.set_fontsize(14)
         pie_ax.axis('equal')
 
         table_ax.axis('off')
         table = table_ax.table(
             cellText=[[label, f'{value:.2f}%'] for label, value in zip(labels, sizes)],
             colLabels=['Stakeholder', 'Ownership'],
-            colWidths=[0.68, 0.32],
+            colWidths=[0.58, 0.42],
             cellLoc='left',
             loc='center'
         )
         table.auto_set_font_size(False)
-        table.set_fontsize(5.2)
-        table.scale(1, 1.0)
+        table.set_fontsize(14)
+        table.scale(1, 2.2)
         for row in range(1, len(labels) + 1):
             table[(row, 0)].set_facecolor(color_map[labels[row - 1]])
             table[(row, 0)].get_text().set_color('white')
@@ -249,6 +289,10 @@ def plot_pie_charts(
         table[(0, 1)].set_facecolor('#444444')
         table[(0, 0)].get_text().set_color('white')
         table[(0, 1)].get_text().set_color('white')
+        for row in range(0, len(labels) + 1):
+            cell = table[(row, 1)]
+            cell.get_text().set_ha('right')
+            cell.PAD = 0.05
 
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
     if show_plot:
@@ -259,11 +303,21 @@ def plot_pie_charts(
     return fig
 
 
-def build_input_scenario(investor_pct: float, investment_amount: float) -> tuple[str, dict]:
+def build_input_scenario(
+    investor_pct: float,
+    investment_amount: float,
+    safes_convert: bool = SAFES_CONVERT
+) -> tuple[str, dict]:
     """Build a cap table from a new investor percentage and investment amount."""
     post_money = investment_amount / (investor_pct / 100.0)
     pre_money = post_money - investment_amount
-    safe_pct = (total_safes_amount / post_money) * 100.0
+    if safes_convert:
+        mike_pct = (mike_safe_amount / min(post_money, mike_safe_cap)) * 100.0
+        noah_pct = noah_baseline_pct
+    else:
+        mike_pct = 0.0
+        noah_pct = 0.0
+    safe_pct = mike_pct + noah_pct
     remaining_dilutable_equity = (
         100.0 - fixed_non_dilutable_pct - investor_pct - safe_pct
     )
@@ -273,9 +327,11 @@ def build_input_scenario(investor_pct: float, investment_amount: float) -> tuple
     for stakeholder, initial_pct in initial_cap_table.items():
         if stakeholder in non_dilutable:
             scenario[stakeholder] = initial_pct
-        elif stakeholder == 'SAFEs':
-            scenario[stakeholder] = safe_pct
-        elif stakeholder == 'New Investor':
+        elif stakeholder == 'Mike (SAFE)':
+            scenario[stakeholder] = mike_pct
+        elif stakeholder == 'Noah (SAFE)':
+            scenario[stakeholder] = noah_pct
+        elif stakeholder == 'ASI Investor':
             scenario[stakeholder] = investor_pct
         else:
             scenario[stakeholder] = initial_pct * scenario_scale_factor
