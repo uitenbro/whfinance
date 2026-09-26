@@ -285,7 +285,7 @@ def write_output(sh, results):
             row_vals = [row_name]
             for col in df_result.columns:
                 val = df_result.loc[row_name, col]
-                row_vals.append(int(val) if row_name in INTEGER_ROWS else round(float(val), 2))
+                row_vals.append(int(val) if row_name in INTEGER_ROWS else float(val))
             all_rows.append(row_vals)
         all_rows.append([])
         all_rows.append([])
@@ -321,7 +321,7 @@ def write_monthly_plan(sh, results):
         all_rows.append([f"=== {label} ==="])
         all_rows.append(["Metric"] + month_labels)
         for col in MONTHLY_LINE_ITEMS:
-            all_rows.append([col] + [round(r.get(col, 0)) for r in monthly_rows])
+            all_rows.append([col] + [r.get(col, 0) for r in monthly_rows])
         all_rows.append([])
         all_rows.append([])
 
@@ -342,7 +342,7 @@ def write_pl_output(sh, results):
             row_vals = [row_name]
             for col in pl_df_result.columns:
                 val = pl_df_result.loc[row_name, col]
-                row_vals.append(int(val) if row_name in INTEGER_ROWS else round(float(val), 2))
+                row_vals.append(int(val) if row_name in INTEGER_ROWS else float(val))
             all_rows.append(row_vals)
         all_rows.append([])
         all_rows.append([])
@@ -362,7 +362,7 @@ def write_pl_monthly(sh, results):
         all_rows.append([f"=== {label} ==="])
         all_rows.append(["Metric"] + month_labels)
         for col in MONTHLY_PL_LINE_ITEMS:
-            all_rows.append([col] + [round(r.get(col, 0)) for r in pl_monthly_rows])
+            all_rows.append([col] + [r.get(col, 0) for r in pl_monthly_rows])
         all_rows.append([])
         all_rows.append([])
 
